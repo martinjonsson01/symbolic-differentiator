@@ -10,24 +10,61 @@ use super::token::Token;
 /// Turns the input string into individual tokens containing values
 pub fn tokenize(expression: String) -> Result<Vec<Token>> {
     let mut tokens: Vec<Token> = vec![];
-    for char in expression.chars() {
-        let token: Token = match char {
-            '+' => Token::Plus,
-            '-' => Token::Minus,
-            '*' => Token::Star,
-            '/' => Token::ForwardSlash,
-            text => parse_literal_or_identifier(text.to_string()),
+
+    let symbols = ['+', '-', '*', '/'];
+
+    let mut start = 0;
+    let mut length = 0;
+    while start < expression.len() {
+
+        // Run until next symbol
+        loop {
+            let char = expression.chars().nth(start + length);
+            let next_char = expression.chars().nth(start + length + 1);
+
+            match next_char {
+                None => {
+                    // Next char is out of bounds, but we still need to include the current one
+                    length += 1;
+                    break;
+                }
+                Some(next_char) => {
+                    let char = char.unwrap();
+                    if symbols.contains(&char) {
+                        length = 1;
+                        break;
+                    }
+
+                    length += 1;
+                    if symbols.contains(&next_char) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        let text = &expression[start..start + length];
+
+        let token: Token = match text {
+            "+" => Token::Plus,
+            "-" => Token::Minus,
+            "*" => Token::Star,
+            "/" => Token::ForwardSlash,
+            text => parse_literal_or_identifier(text),
         };
         tokens.push(token);
+
+        start += length;
+        length = 0;
     }
     Ok(tokens)
 }
 
-fn parse_literal_or_identifier(text: String) -> Token {
+fn parse_literal_or_identifier(text: &str) -> Token {
     let number = text.parse::<f64>();
     match number {
         Ok(value) => Token::Literal(value),
-        Err(_) => Token::Identifier(text),
+        Err(_) => Token::Identifier(text.to_string()),
     }
 }
 
@@ -75,6 +112,17 @@ mod tests {
             Token::Literal(1.0),
         ];
         let actual_tokens = tokenize("x+1".to_string()).unwrap();
+        assert_eq!(actual_tokens, expected_tokens);
+    }
+
+    #[test]
+    fn simple_multi_character_expression_returns_multi_character_tokens() {
+        let expected_tokens = [
+            Token::Identifier("foo".to_string()),
+            Token::Plus,
+            Token::Literal(123.4),
+        ];
+        let actual_tokens = tokenize("foo+123.4".to_string()).unwrap();
         assert_eq!(actual_tokens, expected_tokens);
     }
 }

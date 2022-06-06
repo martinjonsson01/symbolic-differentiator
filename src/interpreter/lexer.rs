@@ -1,17 +1,12 @@
 use anyhow::Result;
+use std::str::FromStr;
 
 use super::token::Token;
-
-//Err(anyhow!(
-//            "Incorrect formatting of expression: {}",
-//           expression
-//        ))
+use super::token::symbols as symbols;
 
 /// Turns the input string into individual tokens containing values
 pub fn tokenize(expression: String) -> Result<Vec<Token>> {
     let mut tokens: Vec<Token> = vec![];
-
-    let symbols = ['+', '-', '*', '/'];
 
     let mut start = 0;
     let mut length = 0;
@@ -44,14 +39,7 @@ pub fn tokenize(expression: String) -> Result<Vec<Token>> {
         }
 
         let text = &expression[start..start + length];
-
-        let token: Token = match text {
-            "+" => Token::Plus,
-            "-" => Token::Minus,
-            "*" => Token::Star,
-            "/" => Token::ForwardSlash,
-            text => parse_literal_or_identifier(text),
-        };
+        let token: Token = Token::from_str(text).unwrap();
         tokens.push(token);
 
         start += length;
@@ -59,15 +47,6 @@ pub fn tokenize(expression: String) -> Result<Vec<Token>> {
     }
     Ok(tokens)
 }
-
-fn parse_literal_or_identifier(text: &str) -> Token {
-    let number = text.parse::<f64>();
-    match number {
-        Ok(value) => Token::Literal(value),
-        Err(_) => Token::Identifier(text.to_string()),
-    }
-}
-
 
 #[cfg(test)]
 mod tests {

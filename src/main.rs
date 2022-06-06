@@ -9,12 +9,17 @@ use log::{info, warn};
 struct Arguments {
     /// The expression to differentiate
     expression: String,
+    /// Whether to log additional information
+    #[clap(flatten)]
+    verbose: clap_verbosity_flag::Verbosity,
 }
 
 fn main() -> Result<()> {
-    env_logger::init();
-
     let args = Arguments::parse();
+    env_logger::Builder::new()
+        .filter_level(args.verbose.log_level_filter())
+        .init();
+
     warn!("Starting with expression {}", args.expression);
 
     let value : i32 = parse_expression(args.expression)

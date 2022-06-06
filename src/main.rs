@@ -25,8 +25,8 @@ fn main() -> Result<()> {
 
     warn!("Starting with expression {}", args.expression);
 
-    let value: i32 =
-        text_parser::parse_expression(args.expression).with_context(|| format!("could not parse expression"))?;
+    let value: i32 = text_parser::parse_expression(args.expression)
+        .with_context(|| format!("could not parse expression"))?;
     info!("value is {}", value);
 
     info!("Program finished executing!");

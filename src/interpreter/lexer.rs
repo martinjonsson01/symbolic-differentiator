@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use anyhow::Result;
 
 use super::token::Token;
@@ -17,12 +16,21 @@ pub fn tokenize(expression: String) -> Result<Vec<Token>> {
             '-' => Token::Minus,
             '*' => Token::Star,
             '/' => Token::ForwardSlash,
-            name => Token::Identifier(name.to_string()),
+            text => parse_literal_or_identifier(text.to_string()),
         };
         tokens.push(token);
     }
     Ok(tokens)
 }
+
+fn parse_literal_or_identifier(text: String) -> Token {
+    let number = text.parse::<f64>();
+    match number {
+        Ok(value) => Token::Literal(value),
+        Err(_) => Token::Identifier(text),
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -56,6 +64,17 @@ mod tests {
             Token::Identifier("f".to_string()),
         ];
         let actual_tokens = tokenize("a+b-c/d*e+f".to_string()).unwrap();
+        assert_eq!(actual_tokens, expected_tokens);
+    }
+
+    #[test]
+    fn expression_with_literals_and_identifiers_returns_both_types_of_tokens() {
+        let expected_tokens = [
+            Token::Identifier("x".to_string()),
+            Token::Plus,
+            Token::Literal(1.0),
+        ];
+        let actual_tokens = tokenize("x+1".to_string()).unwrap();
         assert_eq!(actual_tokens, expected_tokens);
     }
 }

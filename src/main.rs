@@ -4,8 +4,6 @@ use log::{info, warn};
 
 mod interpreter;
 
-pub use crate::interpreter::lexer;
-
 /// Differentiates the given expression with respect to the given variable
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -27,9 +25,8 @@ fn main() -> Result<()> {
 
     warn!("Starting with expression {}", args.expression);
 
-    let value: i32 = lexer::tokenize(args.expression)
-        .with_context(|| "could not parse expression".to_string())?;
-    info!("value is {}", value);
+    let result: String = interpreter::convert(args.expression)?;
+    info!("value is {}", result);
 
     info!("Program finished executing!");
     Ok(())

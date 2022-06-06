@@ -1,9 +1,10 @@
 use clap::Parser;
 
-/// What and how to differentiate.
-#[derive(Parser)]
+/// Differentiates the given expression
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
 struct Arguments {
-    /// The expression to differentiate.
+    /// The expression to differentiate
     expression: String,
 }
 

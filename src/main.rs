@@ -8,7 +8,20 @@ struct Arguments {
     expression: String,
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Arguments::parse();
-    println!("{0}", args.expression);
+    println!("{}", args.expression);
+
+    let value = parse_expression(args.expression)?;
+    println!("value is {}", value); 
+
+    Ok(())
+}
+
+fn parse_expression(expression: String) -> Result<i32, String> {
+    if expression == "x+y" {
+        Err("Whoops".to_string())
+    } else {
+        Ok(1)
+    }
 }

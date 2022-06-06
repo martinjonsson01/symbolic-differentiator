@@ -1,6 +1,7 @@
 use clap::Parser;
 use anyhow::{{Context, Result}};
 use anyhow::anyhow;
+use log::{info, warn};
 
 /// Differentiates the given expression
 #[derive(Parser, Debug)]
@@ -11,13 +12,16 @@ struct Arguments {
 }
 
 fn main() -> Result<()> {
+    env_logger::init();
+
     let args = Arguments::parse();
-    println!("{}", args.expression);
+    warn!("Starting with expression {}", args.expression);
 
-    let value = parse_expression(args.expression)
+    let value : i32 = parse_expression(args.expression)
         .with_context(|| format!("could not parse expression"))?;
-    println!("value is {}", value); 
+    info!("value is {}", value); 
 
+    info!("Program finished executing!");
     Ok(())
 }
 

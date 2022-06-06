@@ -2,16 +2,18 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use log::{info, warn};
 
-mod parser;
+mod interpreter;
 
-pub use crate::parser::text_parser;
+pub use crate::interpreter::text_parser;
 
-/// Differentiates the given expression
+/// Differentiates the given expression with respect to the given variable
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Arguments {
     /// The expression to differentiate
     expression: String,
+    /// The name of the variable to differentiate with respect to
+    variable: String,
     /// Whether to log additional information
     #[clap(flatten)]
     verbose: clap_verbosity_flag::Verbosity,

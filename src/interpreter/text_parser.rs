@@ -17,7 +17,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn incorrect_expression_returns_error() {
+    fn correct_expression_returns_tokens() {
         parse_expression("x+y".to_string()).unwrap_err();
     }
 }

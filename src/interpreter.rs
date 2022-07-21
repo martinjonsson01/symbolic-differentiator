@@ -1,6 +1,7 @@
 pub mod lexer;
 pub mod parser;
 mod token;
+mod operator;
 
 use anyhow::{Context, Result};
 

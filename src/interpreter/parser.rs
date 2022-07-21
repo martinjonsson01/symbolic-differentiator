@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use ::phf::{Map, phf_map};
+use crate::interpreter::operator::Operator;
 
 use super::token::Token;
 
@@ -10,22 +10,11 @@ pub struct TokenNode {
     value: Option<Token>,
 }
 
-struct Operator {
-    precedence: i32,
-    evaluate: fn(f64, f64) -> f64,
-}
 
-impl PartialEq for Operator {
-    fn eq(&self, other: &Self) -> bool {
-        &self.precedence == &other.precedence
-    }
-}
-
-impl PartialOrd for Operator {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.precedence.partial_cmp(&other.precedence)
-    }
-}
+/*pub fn create_expression_tree(tokens: Vec<Token>) -> Result<TokenNode> {
+    // Implemented as an operator precedence parser (Pratt Parsing).
+    Ok(1)
+}*/
 
 fn token_to_operator(token: Token) -> Result<Operator> {
     match token {
@@ -37,30 +26,11 @@ fn token_to_operator(token: Token) -> Result<Operator> {
     }
 }
 
-/*pub fn create_expression_tree(tokens: Vec<Token>) -> Result<TokenNode> {
-    // Implemented as an operator precedence parser.
-    Ok(1)
-}*/
-
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use pretty_assertions::{assert_eq, assert_ne};
-
-    #[test]
-    fn operator_compares_correspond_with_precedence() {
-        let greater = Operator { precedence: 100, evaluate: |a, _| a };
-        let lesser = Operator { precedence: 1, evaluate: |a, _| a };
-        assert!(greater > lesser)
-    }
-
-    #[test]
-    fn operator_equality_correspond_with_precedence() {
-        let greater = Operator { precedence: 100, evaluate: |a, _| a };
-        let lesser = Operator { precedence: 1, evaluate: |a, _| a };
-        assert!(greater != lesser)
-    }
 
     #[test]
     fn token_is_converted_to_correct_operator() {

@@ -15,7 +15,7 @@ pub enum Token {
     CloseParenthesis,
 }
 
-pub static symbols: [char; 6] = ['+', '-', '*', '/', '(', ')'];
+pub static SYMBOLS: [char; 6] = ['+', '-', '*', '/', '(', ')'];
 
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

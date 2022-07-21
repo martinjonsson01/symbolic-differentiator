@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::str::FromStr;
 
 use super::token::Token;
-use super::token::symbols as symbols;
+use super::token::SYMBOLS;
 
 /// Turns the input string into individual tokens containing values
 pub fn tokenize(expression: String) -> Result<Vec<Token>> {
@@ -25,13 +25,13 @@ pub fn tokenize(expression: String) -> Result<Vec<Token>> {
                 }
                 Some(next_char) => {
                     let char = char.unwrap();
-                    if symbols.contains(&char) {
+                    if SYMBOLS.contains(&char) {
                         length = 1;
                         break;
                     }
 
                     length += 1;
-                    if symbols.contains(&next_char) {
+                    if SYMBOLS.contains(&next_char) {
                         break;
                     }
                 }

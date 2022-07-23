@@ -1,5 +1,5 @@
 use std::fmt;
-use std::fmt::{Formatter};
+use std::fmt::Formatter;
 use std::str;
 
 /// A discrete part of an expression

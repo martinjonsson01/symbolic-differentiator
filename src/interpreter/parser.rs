@@ -17,7 +17,7 @@ pub struct TokenNode {
     Ok(1)
 }*/
 
-fn convert_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>> {
+fn infix_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>> {
     let mut tokens: VecDeque<Token> = VecDeque::from(original_tokens);
     let mut operators: VecDeque<Token> = VecDeque::new();
     let mut output: Vec<Token> = vec![];
@@ -182,7 +182,7 @@ mod tests {
         ]
         .to_vec();
 
-        let actual = convert_to_postfix(infix).unwrap();
+        let actual = infix_to_postfix(infix).unwrap();
 
         assert_eq!(actual, postfix)
     }
@@ -208,7 +208,7 @@ mod tests {
         ]
         .to_vec();
 
-        let actual = convert_to_postfix(infix).unwrap();
+        let actual = infix_to_postfix(infix).unwrap();
 
         assert_eq!(actual, postfix)
     }
@@ -250,7 +250,7 @@ mod tests {
         ]
         .to_vec();
 
-        let actual = convert_to_postfix(infix).unwrap();
+        let actual = infix_to_postfix(infix).unwrap();
 
         assert_eq!(actual, postfix)
     }
@@ -278,7 +278,7 @@ mod tests {
         ]
         .to_vec();
 
-        let actual = convert_to_postfix(infix).unwrap();
+        let actual = infix_to_postfix(infix).unwrap();
 
         assert_eq!(actual, postfix)
     }
@@ -295,7 +295,7 @@ mod tests {
         ]
         .to_vec();
 
-        convert_to_postfix(infix).expect_err("Should return Err");
+        infix_to_postfix(infix).expect_err("Should return Err");
     }
 
     /*#[test]

@@ -1,21 +1,8 @@
 use crate::interpreter::operator::{Associativity, Operator};
 use anyhow::{anyhow, bail, Context, Result};
 use std::collections::VecDeque;
-use std::rc::Rc;
 
 use super::token::Token;
-
-/// A part of an expression tree
-pub struct TokenNode {
-    left: Rc<TokenNode>,
-    right: Rc<TokenNode>,
-    value: Option<Token>,
-}
-
-/*pub fn create_expression_tree(tokens: Vec<Token>) -> Result<TokenNode> {
-    // Implemented using recursive descent.
-    Ok(1)
-}*/
 
 fn infix_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>> {
     let mut tokens: VecDeque<Token> = VecDeque::from(original_tokens);

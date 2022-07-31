@@ -25,7 +25,7 @@ fn convert_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>> {
         match token {
             Token::Literal(_) | Token::Identifier(_) => output.push(token),
             Token::OpenParenthesis => operators.push_front(token),
-            Token::Plus | Token::Minus | Token::Star | Token::ForwardSlash => {
+            Token::Plus | Token::Minus | Token::Star | Token::ForwardSlash | Token::Caret => {
                 loop {
                     match operators.front() {
                         None => {
@@ -123,6 +123,11 @@ fn token_to_operator(token: &Token) -> Result<Operator> {
             associativity: Associativity::Left,
             evaluate: |a, b| a / b,
         }),
+        Token::Caret => Ok(Operator {
+            precedence: 2,
+            associativity: Associativity::Right,
+            evaluate: |a, b| f64::powf(a, b),
+        }),
         token => Err(anyhow!("Token {} is not an operator", token)),
     }
 }
@@ -175,6 +180,48 @@ mod tests {
             Token::Identifier("z".to_string()),
             Token::Plus,
             Token::Minus,
+        ]
+        .to_vec();
+
+        let actual = convert_to_postfix(infix).unwrap();
+
+        assert_eq!(actual, postfix)
+    }
+
+    #[test]
+    fn infix_to_postfix_complex_expression() {
+        let infix = [
+            Token::Identifier("a".to_string()),
+            Token::Plus,
+            Token::Identifier("b".to_string()),
+            Token::Star,
+            Token::Identifier("c".to_string()),
+            Token::ForwardSlash,
+            Token::OpenParenthesis,
+            Token::Identifier("d".to_string()),
+            Token::Minus,
+            Token::Identifier("e".to_string()),
+            Token::CloseParenthesis,
+            Token::Caret,
+            Token::Identifier("f".to_string()),
+            Token::Caret,
+            Token::Identifier("g".to_string()),
+        ]
+        .to_vec();
+        let postfix = [
+            Token::Identifier("a".to_string()),
+            Token::Identifier("b".to_string()),
+            Token::Identifier("c".to_string()),
+            Token::Star,
+            Token::Identifier("d".to_string()),
+            Token::Identifier("e".to_string()),
+            Token::Minus,
+            Token::Identifier("f".to_string()),
+            Token::Identifier("g".to_string()),
+            Token::Caret,
+            Token::Caret,
+            Token::ForwardSlash,
+            Token::Plus,
         ]
         .to_vec();
 

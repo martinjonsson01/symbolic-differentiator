@@ -19,7 +19,7 @@ pub struct TokenNode {
 
 fn convert_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>> {
     let mut tokens: VecDeque<Token> = VecDeque::from(original_tokens);
-    let mut operators: Vec<Token> = vec![];
+    let mut operators: VecDeque<Token> = VecDeque::new();
     let mut output: Vec<Token> = vec![];
     while let Some(token) = tokens.pop_front() {
         match token {
@@ -29,28 +29,36 @@ fn convert_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>> {
             | Token::Star
             | Token::ForwardSlash
             | Token::OpenParenthesis => {
-                match operators.last() {
-                    None => {}
-                    Some(other_token) => {
-                        if *other_token == Token::OpenParenthesis {
+                loop {
+                    match operators.front() {
+                        None => {
                             break;
                         }
-                        let operator = token_to_operator(&token)?;
-                        let other_operator = token_to_operator(other_token)?;
-                        if (other_operator > operator)
-                            || (other_operator == operator
-                                && operator.associativity == Associativity::Left)
-                        {
-                            let other_operator_token =
-                                operators.pop().with_context(|| "No operators left.")?; // Pop other_operator
-                            operators.push(other_operator_token.clone()); // Push other_operator
+                        Some(top_of_operator_stack) => {
+                            let operator = token_to_operator(&token)?;
+                            let other_operator = token_to_operator(top_of_operator_stack)?;
+                            let other_token = top_of_operator_stack.clone();
+
+                            if other_token == Token::OpenParenthesis
+                                || (other_operator <= operator)
+                                    && !(other_operator == operator
+                                        && operator.associativity == Associativity::Left)
+                            {
+                                break;
+                            }
+
+                            let other_operator_token = operators
+                                .pop_front()
+                                .with_context(|| "No operators left.")?; // Pop other_operator
+                            output.push(other_operator_token.clone()); // Push other_operator
                         }
                     }
-                };
-                operators.push(token.clone()); // Push operator
+                }
+
+                operators.push_front(token.clone()); // Push operator
             }
             Token::CloseParenthesis => loop {
-                match operators.pop() {
+                match operators.pop_front() {
                     None => {
                         /* Throw mismatched parenthesis exception */
                         todo!();
@@ -70,7 +78,7 @@ fn convert_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>> {
         };
     }
 
-    while let Some(operator) = operators.pop() {
+    while let Some(operator) = operators.pop_front() {
         match operator {
             Token::OpenParenthesis | Token::CloseParenthesis => {
                 /* Throw mismatched parenthesis exception */
@@ -131,6 +139,34 @@ mod tests {
             Token::Identifier("x".to_string()),
             Token::Identifier("y".to_string()),
             Token::Plus,
+        ]
+        .to_vec();
+
+        let actual = convert_to_postfix(infix).unwrap();
+
+        assert_eq!(actual, postfix)
+    }
+
+    #[test]
+    fn infix_to_postfix_multi_operator_expression() {
+        let infix = [
+            Token::Identifier("A".to_string()),
+            Token::Plus,
+            Token::Identifier("B".to_string()),
+            Token::Star,
+            Token::Identifier("C".to_string()),
+            Token::Minus,
+            Token::Identifier("D".to_string()),
+        ]
+        .to_vec();
+        let postfix = [
+            Token::Identifier("A".to_string()),
+            Token::Identifier("B".to_string()),
+            Token::Identifier("C".to_string()),
+            Token::Star,
+            Token::Plus,
+            Token::Identifier("D".to_string()),
+            Token::Minus,
         ]
         .to_vec();
 

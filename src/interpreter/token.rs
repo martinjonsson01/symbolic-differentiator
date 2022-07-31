@@ -1,5 +1,5 @@
-use crate::interpreter::operator::{Operator, OPERATORS};
-use anyhow::{anyhow, Result};
+use crate::interpreter::operator::{Associativity, Operator};
+use anyhow::{Result};
 use std::fmt;
 use std::fmt::Formatter;
 use std::str;
@@ -9,38 +9,19 @@ use std::str;
 pub enum Token {
     Literal(f64),
     Identifier(String),
-    Plus,
-    Minus,
-    Star,
-    Caret,
-    ForwardSlash,
+    Operator(Operator),
     OpenParenthesis,
     CloseParenthesis,
 }
 
 pub static SYMBOLS: [char; 7] = ['+', '-', '*', '/', '^', '(', ')'];
 
-impl Token {
-    pub fn to_operator(&self) -> Result<&'static Operator> {
-        for operator in OPERATORS.iter() {
-            if &operator.token == self {
-                return Ok(operator);
-            }
-        }
-        Err(anyhow!("Token {} is not an operator", self))
-    }
-}
-
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Token::Literal(value) => write!(f, "{}", value),
             Token::Identifier(name) => write!(f, "{}", name),
-            Token::Plus => write!(f, "+"),
-            Token::Minus => write!(f, "-"),
-            Token::Star => write!(f, "*"),
-            Token::Caret => write!(f, "^"),
-            Token::ForwardSlash => write!(f, "/"),
+            Token::Operator(operator) => write!(f, "{}", operator),
             Token::OpenParenthesis => write!(f, "("),
             Token::CloseParenthesis => write!(f, ")"),
         }
@@ -52,11 +33,36 @@ impl str::FromStr for Token {
 
     fn from_str(input: &str) -> Result<Token, Self::Err> {
         match input {
-            "+" => Ok(Token::Plus),
-            "-" => Ok(Token::Minus),
-            "*" => Ok(Token::Star),
-            "/" => Ok(Token::ForwardSlash),
-            "^" => Ok(Token::Caret),
+            "+" => Ok(Token::Operator(Operator {
+                symbol: "+".into(),
+                precedence: 0,
+                associativity: Associativity::Left,
+                evaluate: |a, b| a + b,
+            })),
+            "-" => Ok(Token::Operator(Operator {
+                symbol: "-".into(),
+                precedence: 0,
+                associativity: Associativity::Left,
+                evaluate: |a, b| a - b,
+            })),
+            "*" => Ok(Token::Operator(Operator {
+                symbol: "*".into(),
+                precedence: 1,
+                associativity: Associativity::Left,
+                evaluate: |a, b| a * b,
+            })),
+            "/" => Ok(Token::Operator(Operator {
+                symbol: "/".into(),
+                precedence: 1,
+                associativity: Associativity::Left,
+                evaluate: |a, b| a / b,
+            })),
+            "^" => Ok(Token::Operator(Operator {
+                symbol: "^".into(),
+                precedence: 2,
+                associativity: Associativity::Right,
+                evaluate: |a, b| f64::powf(a, b),
+            })),
             "(" => Ok(Token::OpenParenthesis),
             ")" => Ok(Token::CloseParenthesis),
             input => Ok(parse_literal_or_identifier(input)),

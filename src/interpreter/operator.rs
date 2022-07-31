@@ -1,48 +1,17 @@
-use crate::interpreter::token::Token;
 use std::cmp::Ordering;
-
-pub static OPERATORS: [Operator; 5] = [
-    Operator {
-        token: Token::Plus,
-        precedence: 0,
-        associativity: Associativity::Left,
-        evaluate: |a, b| a + b,
-    },
-    Operator {
-        token: Token::Minus,
-        precedence: 0,
-        associativity: Associativity::Left,
-        evaluate: |a, b| a - b,
-    },
-    Operator {
-        token: Token::Star,
-        precedence: 1,
-        associativity: Associativity::Left,
-        evaluate: |a, b| a * b,
-    },
-    Operator {
-        token: Token::ForwardSlash,
-        precedence: 1,
-        associativity: Associativity::Left,
-        evaluate: |a, b| a / b,
-    },
-    Operator {
-        token: Token::Caret,
-        precedence: 2,
-        associativity: Associativity::Right,
-        evaluate: |a, b| f64::powf(a, b),
-    },
-];
+use std::fmt;
+use std::fmt::Formatter;
 
 /// A binary mathematical operator.
+#[derive(Clone)]
 pub struct Operator {
-    pub token: Token,
+    pub symbol: String,
     pub precedence: i32,
     pub associativity: Associativity,
     pub evaluate: fn(f64, f64) -> f64,
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Associativity {
     Left,
     Right,
@@ -60,21 +29,26 @@ impl PartialOrd for Operator {
     }
 }
 
+impl fmt::Display for Operator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.symbol)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::interpreter::token::Token;
 
     #[test]
     fn operator_compares_correspond_with_precedence() {
         let greater = Operator {
-            token: Token::Plus,
+            symbol: "+".into(),
             precedence: 100,
             associativity: Associativity::Left,
             evaluate: |a, _| a,
         };
         let lesser = Operator {
-            token: Token::Plus,
+            symbol: "+".into(),
             precedence: 1,
             associativity: Associativity::Left,
             evaluate: |a, _| a,
@@ -85,13 +59,13 @@ mod tests {
     #[test]
     fn operator_equality_correspond_with_precedence() {
         let greater = Operator {
-            token: Token::Plus,
+            symbol: "+".into(),
             precedence: 100,
             associativity: Associativity::Left,
             evaluate: |a, _| a,
         };
         let lesser = Operator {
-            token: Token::Plus,
+            symbol: "+".into(),
             precedence: 1,
             associativity: Associativity::Left,
             evaluate: |a, _| a,

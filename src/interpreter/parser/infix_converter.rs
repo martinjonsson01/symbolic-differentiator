@@ -1,4 +1,4 @@
-use crate::interpreter::operator::Associativity;
+use crate::interpreter::operator::{Associativity, Operator};
 use anyhow::{bail, Context, Result};
 use std::collections::VecDeque;
 
@@ -12,8 +12,8 @@ fn infix_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>> {
         match token {
             Token::Literal(_) | Token::Identifier(_) => output.push(token),
             Token::OpenParenthesis => operators.push_front(token),
-            Token::Plus | Token::Minus | Token::Star | Token::ForwardSlash | Token::Caret => {
-                parse_operator_token(&mut operators, &mut output, &token)?
+            Token::Operator(ref operator) => {
+                parse_operator_token(&mut operators, &mut output, &token, &operator)?
             }
             Token::CloseParenthesis => {
                 parse_closing_parenthesis_token(&mut operators, &mut output)?
@@ -79,6 +79,7 @@ fn parse_operator_token(
     operators: &mut VecDeque<Token>,
     output: &mut Vec<Token>,
     token: &Token,
+    operator: &Operator,
 ) -> Result<()> {
     loop {
         match operators.front() {
@@ -92,8 +93,12 @@ fn parse_operator_token(
                     break;
                 }
 
-                let operator = token.to_operator()?;
-                let other_operator = top_of_operator_stack.to_operator()?;
+                let other_operator = match top_of_operator_stack {
+                    Token::Operator(operator) => operator,
+                    _ => {
+                        bail!("Found non-operator in operator stack")
+                    }
+                };
                 if (other_operator <= operator)
                     && !(other_operator == operator
                         && operator.associativity == Associativity::Left)
@@ -118,23 +123,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn token_is_converted_to_correct_operator() {
-        let operator = Token::Plus.to_operator().unwrap();
-        assert_eq!((operator.evaluate)(10f64, 12f64), 10f64 + 12f64)
-    }
-
-    #[test]
     fn infix_to_postfix_simple_expression() {
         let infix = [
             Token::Identifier("x".to_string()),
-            Token::Plus,
+            "+".parse().unwrap(),
             Token::Identifier("y".to_string()),
         ]
         .to_vec();
         let postfix = [
             Token::Identifier("x".to_string()),
             Token::Identifier("y".to_string()),
-            Token::Plus,
+            "+".parse().unwrap(),
         ]
         .to_vec();
 
@@ -147,10 +146,10 @@ mod tests {
     fn infix_to_postfix_simple_parenthesised_expression() {
         let infix = [
             Token::Identifier("x".to_string()),
-            Token::Minus,
+            "-".parse().unwrap(),
             Token::OpenParenthesis,
             Token::Identifier("y".to_string()),
-            Token::Plus,
+            "+".parse().unwrap(),
             Token::Identifier("z".to_string()),
             Token::CloseParenthesis,
         ]
@@ -159,8 +158,8 @@ mod tests {
             Token::Identifier("x".to_string()),
             Token::Identifier("y".to_string()),
             Token::Identifier("z".to_string()),
-            Token::Plus,
-            Token::Minus,
+            "+".parse().unwrap(),
+            "-".parse().unwrap(),
         ]
         .to_vec();
 
@@ -173,19 +172,19 @@ mod tests {
     fn infix_to_postfix_complex_expression() {
         let infix = [
             Token::Identifier("a".to_string()),
-            Token::Plus,
+            "+".parse().unwrap(),
             Token::Identifier("b".to_string()),
-            Token::Star,
+            "*".parse().unwrap(),
             Token::Identifier("c".to_string()),
-            Token::ForwardSlash,
+            "/".parse().unwrap(),
             Token::OpenParenthesis,
             Token::Identifier("d".to_string()),
-            Token::Minus,
+            "-".parse().unwrap(),
             Token::Identifier("e".to_string()),
             Token::CloseParenthesis,
-            Token::Caret,
+            "^".parse().unwrap(),
             Token::Identifier("f".to_string()),
-            Token::Caret,
+            "^".parse().unwrap(),
             Token::Identifier("g".to_string()),
         ]
         .to_vec();
@@ -193,16 +192,16 @@ mod tests {
             Token::Identifier("a".to_string()),
             Token::Identifier("b".to_string()),
             Token::Identifier("c".to_string()),
-            Token::Star,
+            "*".parse().unwrap(),
             Token::Identifier("d".to_string()),
             Token::Identifier("e".to_string()),
-            Token::Minus,
+            "-".parse().unwrap(),
             Token::Identifier("f".to_string()),
             Token::Identifier("g".to_string()),
-            Token::Caret,
-            Token::Caret,
-            Token::ForwardSlash,
-            Token::Plus,
+            "^".parse().unwrap(),
+            "^".parse().unwrap(),
+            "/".parse().unwrap(),
+            "+".parse().unwrap(),
         ]
         .to_vec();
 
@@ -215,11 +214,11 @@ mod tests {
     fn infix_to_postfix_multi_operator_expression() {
         let infix = [
             Token::Identifier("A".to_string()),
-            Token::Plus,
+            "+".parse().unwrap(),
             Token::Identifier("B".to_string()),
-            Token::Star,
+            "*".parse().unwrap(),
             Token::Identifier("C".to_string()),
-            Token::Minus,
+            "-".parse().unwrap(),
             Token::Identifier("D".to_string()),
         ]
         .to_vec();
@@ -227,10 +226,10 @@ mod tests {
             Token::Identifier("A".to_string()),
             Token::Identifier("B".to_string()),
             Token::Identifier("C".to_string()),
-            Token::Star,
-            Token::Plus,
+            "*".parse().unwrap(),
+            "+".parse().unwrap(),
             Token::Identifier("D".to_string()),
-            Token::Minus,
+            "-".parse().unwrap(),
         ]
         .to_vec();
 
@@ -244,7 +243,7 @@ mod tests {
         let infix = [
             Token::OpenParenthesis,
             Token::Identifier("x".to_string()),
-            Token::Plus,
+            "+".parse().unwrap(),
             Token::Identifier("y".to_string()),
             Token::CloseParenthesis,
             Token::CloseParenthesis,

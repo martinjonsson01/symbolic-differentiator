@@ -55,7 +55,7 @@ mod tests {
     fn simple_expression_returns_tokens() {
         let expected_tokens = [
             Token::Identifier("x".to_string()),
-            Token::Plus,
+            "+".parse().unwrap(),
             Token::Identifier("y".to_string()),
         ];
         let actual_tokens = tokenize("x+y".to_string()).unwrap();
@@ -66,15 +66,15 @@ mod tests {
     fn long_expression_returns_tokens() {
         let expected_tokens = [
             Token::Identifier("a".to_string()),
-            Token::Plus,
+            "+".parse().unwrap(),
             Token::Identifier("b".to_string()),
-            Token::Minus,
+            "-".parse().unwrap(),
             Token::Identifier("c".to_string()),
-            Token::ForwardSlash,
+            "/".parse().unwrap(),
             Token::Identifier("d".to_string()),
-            Token::Star,
+            "*".parse().unwrap(),
             Token::Identifier("e".to_string()),
-            Token::Plus,
+            "+".parse().unwrap(),
             Token::Identifier("f".to_string()),
         ];
         let actual_tokens = tokenize("a+b-c/d*e+f".to_string()).unwrap();
@@ -85,7 +85,7 @@ mod tests {
     fn expression_with_literals_and_identifiers_returns_both_types_of_tokens() {
         let expected_tokens = [
             Token::Identifier("x".to_string()),
-            Token::Plus,
+            "+".parse().unwrap(),
             Token::Literal(1.0),
         ];
         let actual_tokens = tokenize("x+1".to_string()).unwrap();
@@ -96,7 +96,7 @@ mod tests {
     fn simple_multi_character_expression_returns_multi_character_tokens() {
         let expected_tokens = [
             Token::Identifier("foo".to_string()),
-            Token::Plus,
+            "+".parse().unwrap(),
             Token::Literal(123.4),
         ];
         let actual_tokens = tokenize("foo+123.4".to_string()).unwrap();

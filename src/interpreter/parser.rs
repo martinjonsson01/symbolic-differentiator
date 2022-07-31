@@ -1,5 +1,5 @@
 use crate::interpreter::operator::{Associativity, Operator};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use std::collections::VecDeque;
 use std::rc::Rc;
 
@@ -60,8 +60,7 @@ fn convert_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>> {
             Token::CloseParenthesis => loop {
                 match operators.pop_front() {
                     None => {
-                        /* Throw mismatched parenthesis exception */
-                        todo!();
+                        bail!("Mismatched parenthesis");
                     }
                     Some(operator_token) => {
                         output.push(operator_token.clone());
@@ -81,8 +80,7 @@ fn convert_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>> {
     while let Some(operator) = operators.pop_front() {
         match operator {
             Token::OpenParenthesis | Token::CloseParenthesis => {
-                /* Throw mismatched parenthesis exception */
-                todo!();
+                bail!("Mismatched parenthesis");
             }
             operator => output.push(operator),
         }
@@ -173,6 +171,21 @@ mod tests {
         let actual = convert_to_postfix(infix).unwrap();
 
         assert_eq!(actual, postfix)
+    }
+
+    #[test]
+    fn infix_to_postfix_mismatched_parenthesis_should_return_err() {
+        let infix = [
+            Token::OpenParenthesis,
+            Token::Identifier("x".to_string()),
+            Token::Plus,
+            Token::Identifier("y".to_string()),
+            Token::CloseParenthesis,
+            Token::CloseParenthesis,
+        ]
+        .to_vec();
+
+        convert_to_postfix(infix).expect_err("Should return Err");
     }
 
     /*#[test]

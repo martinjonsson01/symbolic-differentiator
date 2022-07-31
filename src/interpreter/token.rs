@@ -10,12 +10,13 @@ pub enum Token {
     Plus,
     Minus,
     Star,
+    Caret,
     ForwardSlash,
     OpenParenthesis,
     CloseParenthesis,
 }
 
-pub static SYMBOLS: [char; 6] = ['+', '-', '*', '/', '(', ')'];
+pub static SYMBOLS: [char; 7] = ['+', '-', '*', '/', '^', '(', ')'];
 
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -25,6 +26,7 @@ impl fmt::Display for Token {
             Token::Plus => write!(f, "+"),
             Token::Minus => write!(f, "-"),
             Token::Star => write!(f, "*"),
+            Token::Caret => write!(f, "^"),
             Token::ForwardSlash => write!(f, "/"),
             Token::OpenParenthesis => write!(f, "("),
             Token::CloseParenthesis => write!(f, ")"),
@@ -41,6 +43,7 @@ impl str::FromStr for Token {
             "-" => Ok(Token::Minus),
             "*" => Ok(Token::Star),
             "/" => Ok(Token::ForwardSlash),
+            "^" => Ok(Token::Caret),
             "(" => Ok(Token::OpenParenthesis),
             ")" => Ok(Token::CloseParenthesis),
             input => Ok(parse_literal_or_identifier(input)),

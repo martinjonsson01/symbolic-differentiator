@@ -116,26 +116,31 @@ fn parse_operator_token(
 fn token_to_operator(token: &Token) -> Result<Operator> {
     match token {
         Token::Plus => Ok(Operator {
+            symbol: "+".into(),
             precedence: 0,
             associativity: Associativity::Left,
             evaluate: |a, b| a + b,
         }),
         Token::Minus => Ok(Operator {
+            symbol: "-".into(),
             precedence: 0,
             associativity: Associativity::Left,
             evaluate: |a, b| a - b,
         }),
         Token::Star => Ok(Operator {
+            symbol: "*".into(),
             precedence: 1,
             associativity: Associativity::Left,
             evaluate: |a, b| a * b,
         }),
         Token::ForwardSlash => Ok(Operator {
+            symbol: "/".into(),
             precedence: 1,
             associativity: Associativity::Left,
             evaluate: |a, b| a / b,
         }),
         Token::Caret => Ok(Operator {
+            symbol: "^".into(),
             precedence: 2,
             associativity: Associativity::Right,
             evaluate: |a, b| f64::powf(a, b),

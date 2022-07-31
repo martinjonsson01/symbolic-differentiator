@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 
 /// A binary mathematical operator.
 pub struct Operator {
+    pub symbol: String,
     pub precedence: i32,
     pub associativity: Associativity,
     pub evaluate: fn(f64, f64) -> f64,
@@ -32,11 +33,13 @@ mod tests {
     #[test]
     fn operator_compares_correspond_with_precedence() {
         let greater = Operator {
+            symbol: "+".into(),
             precedence: 100,
             associativity: Associativity::Left,
             evaluate: |a, _| a,
         };
         let lesser = Operator {
+            symbol: "+".into(),
             precedence: 1,
             associativity: Associativity::Left,
             evaluate: |a, _| a,
@@ -47,11 +50,13 @@ mod tests {
     #[test]
     fn operator_equality_correspond_with_precedence() {
         let greater = Operator {
+            symbol: "+".into(),
             precedence: 100,
             associativity: Associativity::Left,
             evaluate: |a, _| a,
         };
         let lesser = Operator {
+            symbol: "+".into(),
             precedence: 1,
             associativity: Associativity::Left,
             evaluate: |a, _| a,

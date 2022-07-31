@@ -1,5 +1,5 @@
-use crate::interpreter::operator::{Associativity, Operator, OPERATORS};
-use anyhow::{anyhow, bail, Context, Result};
+use crate::interpreter::operator::Associativity;
+use anyhow::{bail, Context, Result};
 use std::collections::VecDeque;
 
 use super::token::Token;

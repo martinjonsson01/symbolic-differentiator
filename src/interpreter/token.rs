@@ -1,5 +1,5 @@
 use crate::interpreter::operator::{Operator, OPERATORS};
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, Result};
 use std::fmt;
 use std::fmt::Formatter;
 use std::str;

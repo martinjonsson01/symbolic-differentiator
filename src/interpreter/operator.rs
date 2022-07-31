@@ -1,6 +1,39 @@
 use crate::interpreter::token::Token;
 use std::cmp::Ordering;
 
+pub static OPERATORS: [Operator; 5] = [
+    Operator {
+        token: Token::Plus,
+        precedence: 0,
+        associativity: Associativity::Left,
+        evaluate: |a, b| a + b,
+    },
+    Operator {
+        token: Token::Minus,
+        precedence: 0,
+        associativity: Associativity::Left,
+        evaluate: |a, b| a - b,
+    },
+    Operator {
+        token: Token::Star,
+        precedence: 1,
+        associativity: Associativity::Left,
+        evaluate: |a, b| a * b,
+    },
+    Operator {
+        token: Token::ForwardSlash,
+        precedence: 1,
+        associativity: Associativity::Left,
+        evaluate: |a, b| a / b,
+    },
+    Operator {
+        token: Token::Caret,
+        precedence: 2,
+        associativity: Associativity::Right,
+        evaluate: |a, b| f64::powf(a, b),
+    },
+];
+
 /// A binary mathematical operator.
 pub struct Operator {
     pub token: Token,

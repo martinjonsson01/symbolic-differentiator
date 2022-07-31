@@ -92,8 +92,8 @@ fn parse_operator_token(
                     break;
                 }
 
-                let operator = token_to_operator(&token)?;
-                let other_operator = token_to_operator(top_of_operator_stack)?;
+                let operator = token_to_operator(token.clone())?;
+                let other_operator = token_to_operator(top_of_operator_stack.clone())?;
                 if (other_operator <= operator)
                     && !(other_operator == operator
                         && operator.associativity == Associativity::Left)
@@ -113,40 +113,46 @@ fn parse_operator_token(
     Ok(())
 }
 
-fn token_to_operator(token: &Token) -> Result<Operator> {
-    match token {
-        Token::Plus => Ok(Operator {
-            symbol: "+".into(),
-            precedence: 0,
-            associativity: Associativity::Left,
-            evaluate: |a, b| a + b,
-        }),
-        Token::Minus => Ok(Operator {
-            symbol: "-".into(),
-            precedence: 0,
-            associativity: Associativity::Left,
-            evaluate: |a, b| a - b,
-        }),
-        Token::Star => Ok(Operator {
-            symbol: "*".into(),
-            precedence: 1,
-            associativity: Associativity::Left,
-            evaluate: |a, b| a * b,
-        }),
-        Token::ForwardSlash => Ok(Operator {
-            symbol: "/".into(),
-            precedence: 1,
-            associativity: Associativity::Left,
-            evaluate: |a, b| a / b,
-        }),
-        Token::Caret => Ok(Operator {
-            symbol: "^".into(),
-            precedence: 2,
-            associativity: Associativity::Right,
-            evaluate: |a, b| f64::powf(a, b),
-        }),
-        token => Err(anyhow!("Token {} is not an operator", token)),
+pub static OPERATORS: [Operator; 5] = [
+    Operator {
+        token: Token::Plus,
+        precedence: 0,
+        associativity: Associativity::Left,
+        evaluate: |a, b| a + b,
+    },
+    Operator {
+        token: Token::Minus,
+        precedence: 0,
+        associativity: Associativity::Left,
+        evaluate: |a, b| a - b,
+    },
+    Operator {
+        token: Token::Star,
+        precedence: 1,
+        associativity: Associativity::Left,
+        evaluate: |a, b| a * b,
+    },
+    Operator {
+        token: Token::ForwardSlash,
+        precedence: 1,
+        associativity: Associativity::Left,
+        evaluate: |a, b| a / b,
+    },
+    Operator {
+        token: Token::Caret,
+        precedence: 2,
+        associativity: Associativity::Right,
+        evaluate: |a, b| f64::powf(a, b),
+    },
+];
+
+fn token_to_operator(token: Token) -> Result<&'static Operator> {
+    for operator in OPERATORS.iter() {
+        if operator.token == token {
+            return Ok(operator);
+        }
     }
+    Err(anyhow!("Token {} is not an operator", token))
 }
 
 #[cfg(test)]
@@ -155,7 +161,7 @@ mod tests {
 
     #[test]
     fn token_is_converted_to_correct_operator() {
-        let operator = token_to_operator(&Token::Plus).unwrap();
+        let operator = token_to_operator(Token::Plus).unwrap();
         assert_eq!((operator.evaluate)(10f64, 12f64), 10f64 + 12f64)
     }
 

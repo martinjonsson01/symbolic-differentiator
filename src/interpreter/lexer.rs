@@ -11,7 +11,6 @@ pub fn tokenize(expression: String) -> Result<Vec<Token>> {
     let mut start = 0;
     let mut length = 0;
     while start < expression.len() {
-
         // Run until next symbol
         loop {
             let char = expression.chars().nth(start + length);
@@ -51,7 +50,6 @@ pub fn tokenize(expression: String) -> Result<Vec<Token>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pretty_assertions::{assert_eq, assert_ne};
 
     #[test]
     fn simple_expression_returns_tokens() {

@@ -1,3 +1,5 @@
+use crate::interpreter::operator::{Operator, OPERATORS};
+use anyhow::{anyhow, bail, Context, Result};
 use std::fmt;
 use std::fmt::Formatter;
 use std::str;
@@ -17,6 +19,17 @@ pub enum Token {
 }
 
 pub static SYMBOLS: [char; 7] = ['+', '-', '*', '/', '^', '(', ')'];
+
+impl Token {
+    pub fn to_operator(&self) -> Result<&'static Operator> {
+        for operator in OPERATORS.iter() {
+            if &operator.token == self {
+                return Ok(operator);
+            }
+        }
+        Err(anyhow!("Token {} is not an operator", self))
+    }
+}
 
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

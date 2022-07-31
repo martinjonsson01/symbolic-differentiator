@@ -92,8 +92,8 @@ fn parse_operator_token(
                     break;
                 }
 
-                let operator = token_to_operator(token.clone())?;
-                let other_operator = token_to_operator(top_of_operator_stack.clone())?;
+                let operator = token.to_operator()?;
+                let other_operator = top_of_operator_stack.to_operator()?;
                 if (other_operator <= operator)
                     && !(other_operator == operator
                         && operator.associativity == Associativity::Left)
@@ -113,22 +113,13 @@ fn parse_operator_token(
     Ok(())
 }
 
-fn token_to_operator(token: Token) -> Result<&'static Operator> {
-    for operator in OPERATORS.iter() {
-        if operator.token == token {
-            return Ok(operator);
-        }
-    }
-    Err(anyhow!("Token {} is not an operator", token))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn token_is_converted_to_correct_operator() {
-        let operator = token_to_operator(Token::Plus).unwrap();
+        let operator = Token::Plus.to_operator().unwrap();
         assert_eq!((operator.evaluate)(10f64, 12f64), 10f64 + 12f64)
     }
 

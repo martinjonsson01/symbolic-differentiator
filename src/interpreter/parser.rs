@@ -24,25 +24,25 @@ fn convert_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>> {
     while let Some(token) = tokens.pop_front() {
         match token {
             Token::Literal(_) | Token::Identifier(_) => output.push(token),
-            Token::Plus
-            | Token::Minus
-            | Token::Star
-            | Token::ForwardSlash
-            | Token::OpenParenthesis => {
+            Token::OpenParenthesis => operators.push_front(token),
+            Token::Plus | Token::Minus | Token::Star | Token::ForwardSlash => {
                 loop {
                     match operators.front() {
                         None => {
                             break;
                         }
                         Some(top_of_operator_stack) => {
-                            let operator = token_to_operator(&token)?;
-                            let other_operator = token_to_operator(top_of_operator_stack)?;
                             let other_token = top_of_operator_stack.clone();
 
-                            if other_token == Token::OpenParenthesis
-                                || (other_operator <= operator)
-                                    && !(other_operator == operator
-                                        && operator.associativity == Associativity::Left)
+                            if other_token == Token::OpenParenthesis {
+                                break;
+                            }
+
+                            let operator = token_to_operator(&token)?;
+                            let other_operator = token_to_operator(top_of_operator_stack)?;
+                            if (other_operator <= operator)
+                                && !(other_operator == operator
+                                    && operator.associativity == Associativity::Left)
                             {
                                 break;
                             }
@@ -57,23 +57,35 @@ fn convert_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>> {
 
                 operators.push_front(token.clone()); // Push operator
             }
-            Token::CloseParenthesis => loop {
+            Token::CloseParenthesis => {
+                loop {
+                    match operators.front() {
+                        None => {
+                            bail!("Mismatched parenthesis");
+                        }
+                        Some(top_of_operator_stack) => {
+                            if Token::OpenParenthesis.eq(top_of_operator_stack) {
+                                break;
+                            }
+                            let operator = operators
+                                .pop_front()
+                                .with_context(|| "No operators left.")?;
+                            output.push(operator);
+                        }
+                    }
+                }
                 match operators.pop_front() {
                     None => {
                         bail!("Mismatched parenthesis");
                     }
-                    Some(operator_token) => {
-                        output.push(operator_token.clone());
-
-                        if operator_token != Token::CloseParenthesis {
-                            continue;
+                    Some(top_of_operator_stack) => {
+                        if top_of_operator_stack != Token::OpenParenthesis {
+                            bail!("Mismatched parenthesis");
                         }
-
-                        // Found the matching parenthesis, safe to break.
-                        break;
+                        // Discard the open parenthesis.
                     }
                 }
-            },
+            }
         };
     }
 
@@ -137,6 +149,32 @@ mod tests {
             Token::Identifier("x".to_string()),
             Token::Identifier("y".to_string()),
             Token::Plus,
+        ]
+        .to_vec();
+
+        let actual = convert_to_postfix(infix).unwrap();
+
+        assert_eq!(actual, postfix)
+    }
+
+    #[test]
+    fn infix_to_postfix_simple_parenthesised_expression() {
+        let infix = [
+            Token::Identifier("x".to_string()),
+            Token::Minus,
+            Token::OpenParenthesis,
+            Token::Identifier("y".to_string()),
+            Token::Plus,
+            Token::Identifier("z".to_string()),
+            Token::CloseParenthesis,
+        ]
+        .to_vec();
+        let postfix = [
+            Token::Identifier("x".to_string()),
+            Token::Identifier("y".to_string()),
+            Token::Identifier("z".to_string()),
+            Token::Plus,
+            Token::Minus,
         ]
         .to_vec();
 

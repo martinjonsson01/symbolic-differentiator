@@ -1,5 +1,6 @@
 use crate::interpreter::operator::{Associativity, Operator};
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
+use std::collections::VecDeque;
 use std::rc::Rc;
 
 use super::token::Token;
@@ -17,17 +18,17 @@ pub struct TokenNode {
 }*/
 
 fn convert_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>> {
-    let mut tokens: Vec<Token> = original_tokens.clone();
+    let mut tokens: VecDeque<Token> = VecDeque::from(original_tokens);
     let mut operators: Vec<Token> = vec![];
     let mut output: Vec<Token> = vec![];
-    while let Some(token) = tokens.pop() {
+    while let Some(token) = tokens.pop_front() {
         match token {
             Token::Literal(_) | Token::Identifier(_) => output.push(token),
             Token::Plus
             | Token::Minus
             | Token::Star
             | Token::ForwardSlash
-            | Token::OpenParenthesis => loop {
+            | Token::OpenParenthesis => {
                 match operators.last() {
                     None => {}
                     Some(other_token) => {
@@ -40,12 +41,14 @@ fn convert_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>> {
                             || (other_operator == operator
                                 && operator.associativity == Associativity::Left)
                         {
-                            operators.pop(); // Pop other_operator
-                            operators.push(token.clone()); // Push operator
+                            let other_operator_token =
+                                operators.pop().with_context(|| "No operators left.")?; // Pop other_operator
+                            operators.push(other_operator_token.clone()); // Push other_operator
                         }
                     }
-                }
-            },
+                };
+                operators.push(token.clone()); // Push operator
+            }
             Token::CloseParenthesis => loop {
                 match operators.pop() {
                     None => {
@@ -109,7 +112,6 @@ fn token_to_operator(token: &Token) -> Result<Operator> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pretty_assertions::{assert_eq, assert_ne};
 
     #[test]
     fn token_is_converted_to_correct_operator() {

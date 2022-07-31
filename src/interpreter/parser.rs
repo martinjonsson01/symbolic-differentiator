@@ -26,69 +26,23 @@ fn convert_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>> {
             Token::Literal(_) | Token::Identifier(_) => output.push(token),
             Token::OpenParenthesis => operators.push_front(token),
             Token::Plus | Token::Minus | Token::Star | Token::ForwardSlash | Token::Caret => {
-                loop {
-                    match operators.front() {
-                        None => {
-                            break;
-                        }
-                        Some(top_of_operator_stack) => {
-                            let other_token = top_of_operator_stack.clone();
-
-                            if other_token == Token::OpenParenthesis {
-                                break;
-                            }
-
-                            let operator = token_to_operator(&token)?;
-                            let other_operator = token_to_operator(top_of_operator_stack)?;
-                            if (other_operator <= operator)
-                                && !(other_operator == operator
-                                    && operator.associativity == Associativity::Left)
-                            {
-                                break;
-                            }
-
-                            let other_operator_token = operators
-                                .pop_front()
-                                .with_context(|| "No operators left.")?; // Pop other_operator
-                            output.push(other_operator_token.clone()); // Push other_operator
-                        }
-                    }
-                }
-
-                operators.push_front(token.clone()); // Push operator
+                parse_operator_token(&mut operators, &mut output, &token)?
             }
             Token::CloseParenthesis => {
-                loop {
-                    match operators.front() {
-                        None => {
-                            bail!("Mismatched parenthesis");
-                        }
-                        Some(top_of_operator_stack) => {
-                            if Token::OpenParenthesis.eq(top_of_operator_stack) {
-                                break;
-                            }
-                            let operator = operators
-                                .pop_front()
-                                .with_context(|| "No operators left.")?;
-                            output.push(operator);
-                        }
-                    }
-                }
-                match operators.pop_front() {
-                    None => {
-                        bail!("Mismatched parenthesis");
-                    }
-                    Some(top_of_operator_stack) => {
-                        if top_of_operator_stack != Token::OpenParenthesis {
-                            bail!("Mismatched parenthesis");
-                        }
-                        // Discard the open parenthesis.
-                    }
-                }
+                parse_closing_parenthesis_token(&mut operators, &mut output)?
             }
         };
     }
 
+    transfer_leftover_operators(&mut operators, &mut output)?;
+
+    Ok(output)
+}
+
+fn transfer_leftover_operators(
+    operators: &mut VecDeque<Token>,
+    output: &mut Vec<Token>,
+) -> Result<()> {
     while let Some(operator) = operators.pop_front() {
         match operator {
             Token::OpenParenthesis | Token::CloseParenthesis => {
@@ -97,8 +51,79 @@ fn convert_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>> {
             operator => output.push(operator),
         }
     }
+    Ok(())
+}
 
-    Ok(output)
+fn parse_closing_parenthesis_token(
+    operators: &mut VecDeque<Token>,
+    output: &mut Vec<Token>,
+) -> Result<()> {
+    loop {
+        match operators.front() {
+            None => {
+                bail!("Mismatched parenthesis");
+            }
+            Some(top_of_operator_stack) => {
+                if Token::OpenParenthesis.eq(top_of_operator_stack) {
+                    break;
+                }
+                let operator = operators
+                    .pop_front()
+                    .with_context(|| "No operators left.")?;
+                output.push(operator);
+            }
+        }
+    }
+    match operators.pop_front() {
+        None => {
+            bail!("Mismatched parenthesis");
+        }
+        Some(top_of_operator_stack) => {
+            if top_of_operator_stack != Token::OpenParenthesis {
+                bail!("Mismatched parenthesis");
+            }
+            // Discard the open parenthesis.
+        }
+    }
+    Ok(())
+}
+
+fn parse_operator_token(
+    operators: &mut VecDeque<Token>,
+    output: &mut Vec<Token>,
+    token: &Token,
+) -> Result<()> {
+    loop {
+        match operators.front() {
+            None => {
+                break;
+            }
+            Some(top_of_operator_stack) => {
+                let other_token = top_of_operator_stack.clone();
+
+                if other_token == Token::OpenParenthesis {
+                    break;
+                }
+
+                let operator = token_to_operator(&token)?;
+                let other_operator = token_to_operator(top_of_operator_stack)?;
+                if (other_operator <= operator)
+                    && !(other_operator == operator
+                        && operator.associativity == Associativity::Left)
+                {
+                    break;
+                }
+
+                let other_operator_token = operators
+                    .pop_front()
+                    .with_context(|| "No operators left.")?; // Pop other_operator
+                output.push(other_operator_token.clone()); // Push other_operator
+            }
+        }
+    }
+
+    operators.push_front(token.clone()); // Push operator
+    Ok(())
 }
 
 fn token_to_operator(token: &Token) -> Result<Operator> {

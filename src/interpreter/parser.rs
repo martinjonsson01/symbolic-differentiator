@@ -297,15 +297,4 @@ mod tests {
 
         infix_to_postfix(infix).expect_err("Should return Err");
     }
-
-    /*#[test]
-    fn simple_expression_returns_tree() {
-    let tokens = [
-    Token::Identifier("x".to_string()),
-    Token::Plus,
-    Token::Identifier("y".to_string()),
-    ].to_vec();
-    let tree_root = create_expression_tree(tokens).unwrap();
-    assert_eq!(actual_tokens, expected_tokens);
-    }*/
 }

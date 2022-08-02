@@ -3,7 +3,6 @@ use anyhow::{anyhow, bail, Context, Result};
 use std::rc::Rc;
 use string_builder::Builder;
 
-/// A part of an expression tree
 #[derive(PartialEq)]
 pub struct TokenNode {
     value: Option<Token>,
@@ -95,7 +94,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn simple_expression_returns_tree() {
+    fn simple_expression_returns_correct_tree() {
+        // x + y (but in postfix notation)
         let tokens = [
             Token::Identifier("x".to_string()),
             Token::Identifier("y".to_string()),

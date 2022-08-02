@@ -1,3 +1,5 @@
+[![Rust](https://github.com/martinjonsson01/symbolic-differentiator/actions/workflows/rust.yml/badge.svg?branch=master)](https://github.com/martinjonsson01/symbolic-differentiator/actions/workflows/rust.yml)
+
 # Symbolic Differentiator
 A program that takes in any mathematical expression through a command line interface (CLI) and symbolically differentiates it.
 

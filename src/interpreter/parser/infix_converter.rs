@@ -124,6 +124,7 @@ mod tests {
 
     #[test]
     fn infix_to_postfix_simple_expression() {
+        // x + y
         let infix = [
             Token::Identifier("x".to_string()),
             "+".parse().unwrap(),
@@ -144,6 +145,7 @@ mod tests {
 
     #[test]
     fn infix_to_postfix_simple_parenthesised_expression() {
+        // x - (y + z)
         let infix = [
             Token::Identifier("x".to_string()),
             "-".parse().unwrap(),
@@ -170,6 +172,7 @@ mod tests {
 
     #[test]
     fn infix_to_postfix_complex_expression() {
+        // a + b * c / (d - e)^f^g
         let infix = [
             Token::Identifier("a".to_string()),
             "+".parse().unwrap(),
@@ -212,6 +215,7 @@ mod tests {
 
     #[test]
     fn infix_to_postfix_multi_operator_expression() {
+        // A + B * C - D
         let infix = [
             Token::Identifier("A".to_string()),
             "+".parse().unwrap(),
@@ -273,6 +277,7 @@ mod tests {
 
     #[test]
     fn infix_to_postfix_mismatched_parenthesis_should_return_err() {
+        // (x + y))
         let infix = [
             Token::OpenParenthesis,
             Token::Identifier("x".to_string()),

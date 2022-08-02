@@ -7,7 +7,6 @@ use std::rc::Rc;
 #[derive(PartialEq, Debug)]
 pub struct ExpressionTree {
     root: TokenNode,
-    height: i32,
 }
 
 #[derive(PartialEq, Debug)]
@@ -29,7 +28,6 @@ impl ExpressionTree {
         let mut tokens = postfix_tokens.clone();
         tokens.reverse();
         let mut operands: Vec<TokenNode> = Vec::new();
-        let mut height = 0;
 
         while let Some(token) = tokens.pop() {
             match token {
@@ -42,8 +40,6 @@ impl ExpressionTree {
                     operator_node.set_right(second_operand);
 
                     operands.push(operator_node);
-
-                    height += 2;
                 }
                 Token::Literal(_) | Token::Identifier(_) => operands.push(TokenNode::new(token)),
                 Token::OpenParenthesis | Token::CloseParenthesis => {
@@ -54,7 +50,6 @@ impl ExpressionTree {
 
         Ok(ExpressionTree {
             root: operands.pop().context("No tree root found")?,
-            height,
         })
     }
 
@@ -128,7 +123,6 @@ mod tests {
 
         let mut expected_tree = ExpressionTree {
             root: TokenNode::new("+".parse().unwrap()),
-            height: 2,
         };
         expected_tree
             .root
@@ -177,7 +171,6 @@ mod tests {
     fn create_complex_tree() -> ExpressionTree {
         let mut expected_tree = ExpressionTree {
             root: TokenNode::new("+".parse().unwrap()),
-            height: 4,
         };
         expected_tree
             .root

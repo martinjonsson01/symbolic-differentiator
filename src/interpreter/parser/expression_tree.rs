@@ -1,11 +1,13 @@
 use crate::interpreter::token::Token;
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
+use ptree::{print_tree, TreeBuilder};
+use std::io;
 use std::rc::Rc;
-use string_builder::Builder;
 
 #[derive(PartialEq, Debug)]
 pub struct ExpressionTree {
     root: TokenNode,
+    height: i32,
 }
 
 #[derive(PartialEq, Debug)]
@@ -14,6 +16,7 @@ struct TokenNode {
     left: Option<Rc<TokenNode>>,
     right: Option<Rc<TokenNode>>,
 }
+
 impl ExpressionTree {
     /// Generates an expression tree based off of the given tokens.
     ///
@@ -26,6 +29,7 @@ impl ExpressionTree {
         let mut tokens = postfix_tokens.clone();
         tokens.reverse();
         let mut operands: Vec<TokenNode> = Vec::new();
+        let mut height = 0;
 
         while let Some(token) = tokens.pop() {
             match token {
@@ -38,6 +42,8 @@ impl ExpressionTree {
                     operator_node.set_right(second_operand);
 
                     operands.push(operator_node);
+
+                    height += 2;
                 }
                 Token::Literal(_) | Token::Identifier(_) => operands.push(TokenNode::new(token)),
                 Token::OpenParenthesis | Token::CloseParenthesis => {
@@ -48,8 +54,40 @@ impl ExpressionTree {
 
         Ok(ExpressionTree {
             root: operands.pop().context("No tree root found")?,
+            height,
         })
     }
+
+    fn print(&self) -> io::Result<()> {
+        let mut builder = TreeBuilder::new("expression".into());
+        write_node(&self.root, &mut builder);
+        print_tree(&builder.build())
+    }
+}
+
+fn write_node(node: &TokenNode, builder: &mut TreeBuilder) {
+    match &node.value {
+        None => return,
+        Some(value) => {
+            let node_name = format!("{}", value);
+
+            if node.is_leaf() {
+                builder.add_empty_child(node_name);
+                return;
+            }
+
+            builder.begin_child(node_name)
+        }
+    };
+    match &node.left {
+        None => {}
+        Some(left_node) => write_node(&left_node, builder),
+    };
+    match &node.right {
+        None => {}
+        Some(right_node) => write_node(&right_node, builder),
+    };
+    builder.end_child();
 }
 
 impl TokenNode {
@@ -69,31 +107,8 @@ impl TokenNode {
         self.right = Some(Rc::new(node));
     }
 
-    fn print(&self) -> String {
-        if self.left.is_none() && self.right.is_none() {
-            match &self.value {
-                None => "None".to_string(),
-                Some(value) => value.to_string(),
-            }
-        } else {
-            let mut builder = Builder::default();
-            match &self.value {
-                None => {}
-                Some(value) => builder.append(format!("{}: ", value)),
-            }
-            builder.append("[");
-            match &self.left {
-                None => {}
-                Some(reference) => builder.append(reference.print()),
-            }
-            builder.append(",");
-            match &self.right {
-                None => {}
-                Some(reference) => builder.append(reference.print()),
-            }
-            builder.append("]");
-            return builder.string().unwrap_or("Error".to_string());
-        }
+    fn is_leaf(&self) -> bool {
+        self.left.is_none() && self.right.is_none()
     }
 }
 
@@ -113,6 +128,7 @@ mod tests {
 
         let mut expected_tree = ExpressionTree {
             root: TokenNode::new("+".parse().unwrap()),
+            height: 2,
         };
         expected_tree
             .root
@@ -120,6 +136,7 @@ mod tests {
         expected_tree
             .root
             .set_right(TokenNode::new(Token::Identifier("y".into())));
+        let expected_tree = expected_tree;
 
         let actual_tree = ExpressionTree::new(tokens).unwrap();
 
@@ -128,8 +145,24 @@ mod tests {
 
     #[test]
     fn complex_expression_returns_correct_tree() {
+        let tokens = create_complex_tokens();
+        let expected_tree = create_complex_tree();
+
+        let actual_tree = ExpressionTree::new(tokens).unwrap();
+
+        assert_eq!(actual_tree, expected_tree);
+    }
+
+    #[test]
+    fn print_succeeds() {
+        let tree = create_complex_tree();
+
+        tree.print().unwrap();
+    }
+
+    fn create_complex_tokens() -> Vec<Token> {
         // x + ((y + z) * a) (but in postfix notation)
-        let tokens = [
+        [
             Token::Identifier("x".to_string()),
             Token::Identifier("y".to_string()),
             Token::Identifier("z".to_string()),
@@ -138,10 +171,13 @@ mod tests {
             "*".parse().unwrap(),
             "+".parse().unwrap(),
         ]
-        .to_vec();
+        .to_vec()
+    }
 
+    fn create_complex_tree() -> ExpressionTree {
         let mut expected_tree = ExpressionTree {
             root: TokenNode::new("+".parse().unwrap()),
+            height: 4,
         };
         expected_tree
             .root
@@ -158,8 +194,6 @@ mod tests {
 
         expected_tree.root.set_right(right_node);
 
-        let actual_tree = ExpressionTree::new(tokens).unwrap();
-
-        assert_eq!(actual_tree, expected_tree);
+        expected_tree
     }
 }

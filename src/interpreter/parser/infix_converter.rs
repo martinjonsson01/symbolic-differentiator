@@ -239,6 +239,39 @@ mod tests {
     }
 
     #[test]
+    fn infix_to_postfix_nested_parenthesis_expression() {
+        // a + ((b + c) * d)
+        let infix = [
+            Token::Identifier("a".to_string()),
+            "+".parse().unwrap(),
+            Token::OpenParenthesis,
+            Token::OpenParenthesis,
+            Token::Identifier("b".to_string()),
+            "+".parse().unwrap(),
+            Token::Identifier("c".to_string()),
+            Token::CloseParenthesis,
+            "*".parse().unwrap(),
+            Token::Identifier("d".to_string()),
+            Token::CloseParenthesis,
+        ]
+        .to_vec();
+        let postfix = [
+            Token::Identifier("a".to_string()),
+            Token::Identifier("b".to_string()),
+            Token::Identifier("c".to_string()),
+            "+".parse().unwrap(),
+            Token::Identifier("d".to_string()),
+            "*".parse().unwrap(),
+            "+".parse().unwrap(),
+        ]
+        .to_vec();
+
+        let actual = infix_to_postfix(infix).unwrap();
+
+        assert_eq!(actual, postfix)
+    }
+
+    #[test]
     fn infix_to_postfix_mismatched_parenthesis_should_return_err() {
         let infix = [
             Token::OpenParenthesis,

@@ -56,6 +56,13 @@ impl TokenNode {
     }
 }
 
+/// Generates an expression tree based off of the given tokens.
+///
+/// # Arguments
+///
+/// * `postfix_tokens`: Tokens, ordered in postfix notation, to convert to an expression tree.
+///
+/// returns: Result<TokenNode, Error>  The root of the generated expression tree.
 pub fn create_expression_tree(postfix_tokens: Vec<Token>) -> Result<TokenNode> {
     let mut tokens = postfix_tokens.clone();
     tokens.reverse();

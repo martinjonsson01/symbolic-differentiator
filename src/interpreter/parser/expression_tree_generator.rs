@@ -12,15 +12,7 @@ pub struct TokenNode {
 }
 
 impl TokenNode {
-    pub fn new() -> TokenNode {
-        return TokenNode {
-            value: None,
-            left: None,
-            right: None,
-        };
-    }
-
-    pub fn from_token(token: Token) -> TokenNode {
+    pub fn new(token: Token) -> TokenNode {
         TokenNode {
             value: Some(token),
             left: None,
@@ -75,13 +67,13 @@ pub fn create_expression_tree(postfix_tokens: Vec<Token>) -> Result<TokenNode> {
                 let second_operand = operands.pop().context("Expected a second operand")?;
                 let first_operand = operands.pop().context("Expected a first operand")?;
 
-                let mut operator_node = TokenNode::from_token(token);
+                let mut operator_node = TokenNode::new(token);
                 operator_node.set_left(first_operand);
                 operator_node.set_right(second_operand);
 
                 operands.push(operator_node);
             }
-            Token::Literal(_) | Token::Identifier(_) => operands.push(TokenNode::from_token(token)),
+            Token::Literal(_) | Token::Identifier(_) => operands.push(TokenNode::new(token)),
             Token::OpenParenthesis | Token::CloseParenthesis => {
                 bail!("There should not be any parenthesis present in the input")
             }

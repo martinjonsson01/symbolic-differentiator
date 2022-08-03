@@ -64,7 +64,7 @@ impl ExpressionTree {
         })
     }
 
-    fn traverse<F>(self: &Self, order: TraverseOrder, wrapper: &mut Wrapper<F>)
+    fn traverse<F>(&self, order: TraverseOrder, wrapper: &mut Wrapper<F>)
     where
         F: FnMut(&Token),
     {

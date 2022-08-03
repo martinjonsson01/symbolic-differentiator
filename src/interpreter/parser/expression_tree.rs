@@ -159,14 +159,15 @@ mod tests {
 
     #[test]
     fn simple_expression_returns_correct_tree() {
-        // x + y (but in postfix notation)
-        let tokens = [
-            Token::Identifier("x".to_string()),
-            Token::Identifier("y".to_string()),
-            "+".parse().unwrap(),
-        ]
-        .to_vec();
+        let tokens = create_simple_tokens();
+        let expected_tree = create_simple_tree();
 
+        let actual_tree = ExpressionTree::new(tokens).unwrap();
+
+        assert_eq!(actual_tree, expected_tree);
+    }
+
+    fn create_simple_tree() -> ExpressionTree {
         let mut expected_tree = ExpressionTree {
             root: TokenNode::new("+".parse().unwrap()),
         };
@@ -177,10 +178,18 @@ mod tests {
             .root
             .set_right(TokenNode::new(Token::Identifier("y".into())));
         let expected_tree = expected_tree;
+        expected_tree
+    }
 
-        let actual_tree = ExpressionTree::new(tokens).unwrap();
-
-        assert_eq!(actual_tree, expected_tree);
+    fn create_simple_tokens() -> Vec<Token> {
+        // x + y (but in postfix notation)
+        let tokens = [
+            Token::Identifier("x".to_string()),
+            Token::Identifier("y".to_string()),
+            "+".parse().unwrap(),
+        ]
+        .to_vec();
+        tokens
     }
 
     #[test]

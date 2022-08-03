@@ -8,22 +8,11 @@ pub struct ExpressionTree {
     root: TokenNode,
 }
 
-#[derive(Eq, PartialEq, Copy, Clone)]
-pub(self) enum TraverseOrder {
-    PreOrder,
-    InOrder,
-    PostOrder,
-}
-
 #[derive(PartialEq, Debug)]
 struct TokenNode {
     value: Token,
     left: Option<Rc<TokenNode>>,
     right: Option<Rc<TokenNode>>,
-}
-
-struct Wrapper<F: FnMut(&Token)> {
-    function: F,
 }
 
 impl ExpressionTree {
@@ -61,36 +50,6 @@ impl ExpressionTree {
         Ok(ExpressionTree {
             root: operands.pop().context("No tree root found")?,
         })
-    }
-
-    fn traverse<F>(&self, order: TraverseOrder, wrapper: &mut Wrapper<F>)
-    where
-        F: FnMut(&Token),
-    {
-        Self::traverse_nodes(&self.root, order, wrapper);
-    }
-
-    fn traverse_nodes<F>(node: &TokenNode, order: TraverseOrder, wrapper: &mut Wrapper<F>)
-    where
-        F: FnMut(&Token),
-    {
-        if order == TraverseOrder::PreOrder {
-            (wrapper.function)(&node.value);
-        }
-        match &node.left {
-            None => {}
-            Some(left_node) => Self::traverse_nodes(&left_node, order, wrapper),
-        };
-        if order == TraverseOrder::InOrder {
-            (wrapper.function)(&node.value);
-        }
-        match &node.right {
-            None => {}
-            Some(right_node) => Self::traverse_nodes(&right_node, order, wrapper),
-        };
-        if order == TraverseOrder::PostOrder {
-            (wrapper.function)(&node.value);
-        }
     }
 
     pub fn to_infix(&self) -> Vec<Token> {
@@ -221,69 +180,6 @@ mod tests {
         let tree = create_complex_tree();
 
         tree.print().unwrap();
-    }
-
-    #[test]
-    fn traverse_preorder_returns_nodes_in_preorder() {
-        let tree = create_complex_tree();
-        let expected_order = vec![
-            "+".to_string(),
-            "x".to_string(),
-            "*".to_string(),
-            "+".to_string(),
-            "y".to_string(),
-            "z".to_string(),
-            "a".to_string(),
-        ];
-
-        let mut actual_order = Vec::new();
-        let collect = |token: &Token| actual_order.push(token.to_string());
-        let mut wrapper = Wrapper { function: collect };
-        tree.traverse(TraverseOrder::PreOrder, &mut wrapper);
-
-        assert_eq!(actual_order, expected_order);
-    }
-
-    #[test]
-    fn traverse_inorder_returns_nodes_in_order() {
-        let tree = create_complex_tree();
-        let expected_order = vec![
-            "x".to_string(),
-            "+".to_string(),
-            "y".to_string(),
-            "+".to_string(),
-            "z".to_string(),
-            "*".to_string(),
-            "a".to_string(),
-        ];
-
-        let mut actual_order = Vec::new();
-        let collect = |token: &Token| actual_order.push(token.to_string());
-        let mut wrapper = Wrapper { function: collect };
-        tree.traverse(TraverseOrder::InOrder, &mut wrapper);
-
-        assert_eq!(actual_order, expected_order);
-    }
-
-    #[test]
-    fn traverse_postorder_returns_nodes_in_postorder() {
-        let tree = create_complex_tree();
-        let expected_order = vec![
-            "x".to_string(),
-            "y".to_string(),
-            "z".to_string(),
-            "+".to_string(),
-            "a".to_string(),
-            "*".to_string(),
-            "+".to_string(),
-        ];
-
-        let mut actual_order = Vec::new();
-        let collect = |token: &Token| actual_order.push(token.to_string());
-        let mut wrapper = Wrapper { function: collect };
-        tree.traverse(TraverseOrder::PostOrder, &mut wrapper);
-
-        assert_eq!(actual_order, expected_order);
     }
 
     #[test]

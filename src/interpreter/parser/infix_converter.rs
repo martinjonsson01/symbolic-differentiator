@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 
 use super::token::Token;
 
-fn infix_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>> {
+pub(super) fn infix_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>> {
     let mut tokens: VecDeque<Token> = VecDeque::from(original_tokens);
     let mut operators: VecDeque<Token> = VecDeque::new();
     let mut output: Vec<Token> = vec![];

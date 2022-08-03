@@ -5,7 +5,7 @@ use super::token::Token;
 use super::token::SYMBOLS;
 
 /// Turns the input string into individual tokens containing values
-pub fn tokenize(expression: String) -> Result<Vec<Token>> {
+pub(super) fn tokenize(expression: String) -> Result<Vec<Token>> {
     let mut tokens: Vec<Token> = vec![];
 
     let mut start = 0;

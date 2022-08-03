@@ -10,7 +10,7 @@ pub struct ExpressionTree {
 }
 
 #[derive(Eq, PartialEq, Copy, Clone)]
-pub enum TraverseOrder {
+pub(self) enum TraverseOrder {
     PreOrder,
     InOrder,
     PostOrder,
@@ -105,14 +105,14 @@ impl ExpressionTree {
             let mut subtree_tokens = Self::build_expression_subtree(&node, &left_node);
             tokens.append(&mut subtree_tokens);
         }
-        
+
         tokens.push(node.value.clone());
 
         if let Some(right_node) = &node.right {
             let mut subtree_tokens = Self::build_expression_subtree(&node, &right_node);
             tokens.append(&mut subtree_tokens);
         }
-        
+
         tokens
     }
 
@@ -129,7 +129,7 @@ impl ExpressionTree {
                 }
             }
 
-            // Recurse so that the entire subtree will be contained within 
+            // Recurse so that the entire subtree will be contained within
             // any potential parentheses.
             let mut left_tokens = Self::build_expression(&left_node);
             subtree_tokens.append(&mut left_tokens);

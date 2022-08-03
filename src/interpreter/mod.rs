@@ -90,4 +90,16 @@ mod interpreter_tests {
 
         assert_eq!(regenerated_expression, expression)
     }
+
+    #[test]
+    fn redundant_parentheses_are_stripped_when_regenerating() {
+        let redundant_expression = "a + ((b) * ((c - d)) / (e^2))";
+        let expected_expression = "a + b * (c - d) / e^2";
+
+        let tree = convert(redundant_expression.into()).unwrap();
+        let regenerated_tokens = tree.to_infix();
+        let regenerated_expression = tokens_to_string(regenerated_tokens).unwrap();
+
+        assert_eq!(regenerated_expression, expected_expression)
+    }
 }

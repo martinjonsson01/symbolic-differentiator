@@ -8,13 +8,15 @@ use super::token::SYMBOLS;
 pub(super) fn tokenize(expression: String) -> Result<Vec<Token>> {
     let mut tokens: Vec<Token> = vec![];
 
+    let clean_expression = expression.replace(" ", "");
+    
     let mut start = 0;
     let mut length = 0;
-    while start < expression.len() {
+    while start < clean_expression.len() {
         // Run until next symbol
         loop {
-            let char = expression.chars().nth(start + length);
-            let next_char = expression.chars().nth(start + length + 1);
+            let char = clean_expression.chars().nth(start + length);
+            let next_char = clean_expression.chars().nth(start + length + 1);
 
             match next_char {
                 None => {
@@ -37,7 +39,7 @@ pub(super) fn tokenize(expression: String) -> Result<Vec<Token>> {
             }
         }
 
-        let text = &expression[start..start + length];
+        let text = &clean_expression[start..start + length];
         let token: Token = Token::from_str(text).unwrap();
         tokens.push(token);
 
@@ -102,4 +104,14 @@ mod tests {
         let actual_tokens = tokenize("foo+123.4".to_string()).unwrap();
         assert_eq!(actual_tokens, expected_tokens);
     }
-}
+
+    #[test]
+    fn whitespace_is_not_converted_into_tokens() {
+        let expected_tokens = [
+            Token::Identifier("x".to_string()),
+            "+".parse().unwrap(),
+            Token::Identifier("y".to_string()),
+        ];
+        let actual_tokens = tokenize("   x  + y  ".to_string()).unwrap();
+        assert_eq!(actual_tokens, expected_tokens);
+    } }

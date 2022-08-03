@@ -1,7 +1,6 @@
 use crate::interpreter::token::Token;
 use anyhow::{bail, Context, Result};
 use ptree::{print_tree, TreeBuilder};
-use std::io;
 use std::rc::Rc;
 
 #[derive(PartialEq, Debug)]
@@ -143,10 +142,10 @@ impl ExpressionTree {
         subtree_tokens
     }
 
-    fn print(&self) -> io::Result<()> {
+    pub fn print(&self) -> Result<()> {
         let mut builder = TreeBuilder::new("expression".into());
         write_node(&self.root, &mut builder);
-        print_tree(&builder.build())
+        print_tree(&builder.build()).context("Failed to build tree string")
     }
 }
 

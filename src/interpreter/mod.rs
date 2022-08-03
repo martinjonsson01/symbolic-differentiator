@@ -45,7 +45,7 @@ pub fn convert(expression: String) -> Result<ExpressionTree> {
 /// ```
 pub fn tokens_to_string(tokens: Vec<Token>) -> Result<String> {
     let mut builder = Builder::new(tokens.len());
-    
+
     for token in tokens {
         match token {
             Token::Literal(value) => builder.append(format!("{:.2}", value)),
@@ -57,6 +57,22 @@ pub fn tokens_to_string(tokens: Vec<Token>) -> Result<String> {
             _ => builder.append(token.to_string()),
         }
     }
-    
+
     builder.string().context("Failed to build token string")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn simple_expression_regenerates_to_itself() {
+        let expression = "a + b";
+
+        let tree = convert(expression.into()).unwrap();
+        let regenerated_tokens = tree.to_infix();
+        let regenerated_expression = tokens_to_string(regenerated_tokens).unwrap();
+
+        assert_eq!(regenerated_expression, expression)
+    }
 }

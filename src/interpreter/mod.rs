@@ -48,11 +48,15 @@ pub fn tokens_to_string(tokens: Vec<Token>) -> Result<String> {
 
     for token in tokens {
         match token {
-            Token::Literal(value) => builder.append(format!("{:.2}", value)),
+            Token::Literal(value) => builder.append(format!("{:.0}", value)),
             Token::Operator(operator) => {
-                builder.append(" ");
-                builder.append(operator.to_string());
-                builder.append(" ");
+                if operator.symbol == "^".to_string() {
+                    builder.append(operator.to_string());
+                } else {
+                    builder.append(" ");
+                    builder.append(operator.to_string());
+                    builder.append(" ");
+                }
             }
             _ => builder.append(token.to_string()),
         }
@@ -68,6 +72,17 @@ mod tests {
     #[test]
     fn simple_expression_regenerates_to_itself() {
         let expression = "a + b";
+
+        let tree = convert(expression.into()).unwrap();
+        let regenerated_tokens = tree.to_infix();
+        let regenerated_expression = tokens_to_string(regenerated_tokens).unwrap();
+
+        assert_eq!(regenerated_expression, expression)
+    }
+
+    #[test]
+    fn complex_expression_regenerates_to_itself() {
+        let expression = "a + b * (c - d) / e^2";
 
         let tree = convert(expression.into()).unwrap();
         let regenerated_tokens = tree.to_infix();

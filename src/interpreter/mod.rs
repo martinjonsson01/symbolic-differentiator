@@ -66,7 +66,7 @@ pub fn tokens_to_string(tokens: Vec<Token>) -> Result<String> {
 }
 
 #[cfg(test)]
-mod tests {
+mod interpreter_tests {
     use super::*;
 
     #[test]

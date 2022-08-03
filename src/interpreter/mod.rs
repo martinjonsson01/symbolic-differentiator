@@ -1,6 +1,6 @@
 pub mod lexer;
 mod operator;
-pub mod parser;
+mod parser;
 mod token;
 
 use crate::interpreter::parser::expression_tree::ExpressionTree;

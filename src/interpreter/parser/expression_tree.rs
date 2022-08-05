@@ -2,9 +2,7 @@ use crate::interpreter::token::Token;
 use anyhow::{bail, Context, Result};
 use ptree::{print_tree, TreeBuilder};
 use slotmap::{new_key_type, SlotMap};
-use std::fmt::{Debug, Display};
-use std::mem::swap;
-use std::path::Component::ParentDir;
+use std::fmt::Debug;
 
 new_key_type! { pub struct TokenKey; }
 
@@ -121,7 +119,10 @@ impl<S: Debug> ExpressionTree<S> {
     }
 
     pub fn set_parent(&mut self, key: TokenKey, parent: TokenKey) -> Result<()> {
-        let mut node = self.nodes.get_mut(key).context("Could not find key in tree")?;
+        let mut node = self
+            .nodes
+            .get_mut(key)
+            .context("Could not find key in tree")?;
         node.set_parent(parent);
         Ok(())
     }
@@ -141,7 +142,12 @@ impl<S: Debug> ExpressionTree<S> {
         self.nodes.insert(node)
     }
 
-    pub fn add_node_children(&mut self, token: Token, left: TokenKey, right: TokenKey) -> Result<TokenKey> {
+    pub fn add_node_children(
+        &mut self,
+        token: Token,
+        left: TokenKey,
+        right: TokenKey,
+    ) -> Result<TokenKey> {
         let node = TokenNode::new_children(token, left, right);
         let parent_key = self.nodes.insert(node);
         self.set_parent(left, parent_key)?;
@@ -177,10 +183,13 @@ impl ExpressionTree<Valid> {
     }
 
     fn mut_node_of(&mut self, key: TokenKey) -> Result<&mut TokenNode> {
-        let node = self.nodes.get_mut(key).context("Could not find node in tree")?;
+        let node = self
+            .nodes
+            .get_mut(key)
+            .context("Could not find node in tree")?;
         Ok(node)
     }
-    
+
     pub fn clone_node_of(&mut self, key: TokenKey) -> Result<TokenKey> {
         let node = self.node_of(key)?;
         let cloned = node.clone();
@@ -293,7 +302,7 @@ impl TokenNode {
             right: None,
         }
     }
-    
+
     fn new_children(token: Token, left: TokenKey, right: TokenKey) -> TokenNode {
         TokenNode {
             token,
@@ -306,7 +315,7 @@ impl TokenNode {
     fn set_parent(&mut self, node_key: TokenKey) {
         self.parent = Some(node_key);
     }
-    
+
     fn set_left(&mut self, node_key: TokenKey) {
         self.left = Some(node_key);
     }

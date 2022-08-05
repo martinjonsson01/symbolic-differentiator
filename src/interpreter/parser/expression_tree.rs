@@ -15,7 +15,6 @@ pub struct Valid {
     root_key: TokenKey,
 }
 
-#[derive(Debug)]
 pub struct ExpressionTree<S: Debug> {
     nodes: SlotMap<TokenKey, TokenNode>,
     state: S,
@@ -290,19 +289,29 @@ impl ExpressionTree<Valid> {
 
 impl Display for ExpressionTree<Valid> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut builder = TreeBuilder::new("expression".into());
-        self.write_node(self.root_key(), &mut builder);
-        let mut buffer: Vec<u8> = Vec::new();
-        match write_tree(&builder.build(), &mut buffer) {
-            Ok(_) => {}
-            Err(_) => return Err(fmt::Error),
-        }
-        let text = match std::str::from_utf8(&buffer) {
-            Ok(text) => text,
-            Err(_) => return Err(fmt::Error),
-        };
-        f.write_str(text)
+        format_tree(self, f)
     }
+}
+
+impl Debug for ExpressionTree<Valid> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        format_tree(self, f)
+    }
+}
+
+fn format_tree(tree: &ExpressionTree<Valid>, f: &mut Formatter<'_>) -> fmt::Result {
+    let mut builder = TreeBuilder::new("expression".into());
+    tree.write_node(tree.root_key(), &mut builder);
+    let mut buffer: Vec<u8> = Vec::new();
+    match write_tree(&builder.build(), &mut buffer) {
+        Ok(_) => {}
+        Err(_) => return Err(fmt::Error),
+    }
+    let text = match std::str::from_utf8(&buffer) {
+        Ok(text) => text,
+        Err(_) => return Err(fmt::Error),
+    };
+    f.write_str(text)
 }
 
 impl TokenNode {

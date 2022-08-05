@@ -60,12 +60,6 @@ fn node_eq(
     node_eq(tree1, tree2, node1_left, node2_left) && node_eq(tree1, tree2, node1_right, node2_right)
 }
 
-impl TokenNode {
-    fn token(&self) -> &Token {
-        &self.token
-    }
-}
-
 impl<S: Debug> ExpressionTree<S> {
     fn empty() -> ExpressionTree<Empty> {
         ExpressionTree {
@@ -97,7 +91,7 @@ impl<S: Debug> ExpressionTree<S> {
                         operand_keys.pop().context("Expected a first operand")?;
 
                     let operator_key =
-                        tree.add_node_children(token, first_operand_key, second_operand_key);
+                        tree.add_node_children(token, first_operand_key, second_operand_key)?;
 
                     operand_keys.push(operator_key);
                 }
@@ -134,10 +128,19 @@ impl<S: Debug> ExpressionTree<S> {
         let node = TokenNode::new(token);
         self.nodes.insert(node)
     }
+    
+    pub fn set_parent(&mut self, key: TokenKey, parent: TokenKey) -> Result<()> {
+        let mut node = self.nodes.get_mut(key).context("Could not find key in tree")?;
+        node.parent = Some(parent);
+        Ok(())
+    }
 
-    pub fn add_node_children(&mut self, token: Token, left: TokenKey, right: TokenKey) -> TokenKey {
+    pub fn add_node_children(&mut self, token: Token, left: TokenKey, right: TokenKey) -> Result<TokenKey> {
         let node = TokenNode::new_children(token, left, right);
-        self.nodes.insert(node)
+        let parent_key = self.nodes.insert(node);
+        self.set_parent(left, parent_key)?;
+        self.set_parent(right, parent_key)?;
+        Ok(parent_key)
     }
 }
 
@@ -154,7 +157,7 @@ impl ExpressionTree<Valid> {
 
     pub fn token_of(&self, key: TokenKey) -> Option<&Token> {
         let node = self.nodes.get(key)?;
-        Some(node.token())
+        Some(&node.token)
     }
 
     pub fn is_leaf(&self, key: TokenKey) -> bool {
@@ -261,7 +264,7 @@ impl TokenNode {
             right: None,
         }
     }
-
+    
     fn new_children(token: Token, left: TokenKey, right: TokenKey) -> TokenNode {
         TokenNode {
             token,

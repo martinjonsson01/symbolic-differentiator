@@ -1,8 +1,9 @@
 use crate::interpreter::token::Token;
 use anyhow::{bail, Context, Result};
-use ptree::{print_tree, TreeBuilder};
+use ptree::{write_tree, TreeBuilder};
 use slotmap::{new_key_type, SlotMap};
-use std::fmt::Debug;
+use std::fmt;
+use std::fmt::{Debug, Display, Formatter};
 
 new_key_type! { pub struct TokenKey; }
 
@@ -260,12 +261,6 @@ impl ExpressionTree<Valid> {
         Ok(subtree_tokens)
     }
 
-    pub fn print(&self) -> Result<()> {
-        let mut builder = TreeBuilder::new("expression".into());
-        self.write_node(self.root_key(), &mut builder);
-        print_tree(&builder.build()).context("Failed to build tree string")
-    }
-
     fn write_node(&self, node: TokenKey, builder: &mut TreeBuilder) {
         let node_name = match self.token_of(node) {
             Err(_) => return,
@@ -290,6 +285,23 @@ impl ExpressionTree<Valid> {
             Some(right_node) => self.write_node(right_node, builder),
         };
         builder.end_child();
+    }
+}
+
+impl Display for ExpressionTree<Valid> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut builder = TreeBuilder::new("expression".into());
+        self.write_node(self.root_key(), &mut builder);
+        let mut buffer: Vec<u8> = Vec::new();
+        match write_tree(&builder.build(), &mut buffer) {
+            Ok(_) => {}
+            Err(_) => return Err(fmt::Error),
+        }
+        let text = match std::str::from_utf8(&buffer) {
+            Ok(text) => text,
+            Err(_) => return Err(fmt::Error),
+        };
+        f.write_str(text)
     }
 }
 
@@ -357,7 +369,7 @@ mod tests {
     fn print_succeeds() {
         let tree = create_complex_tree();
 
-        tree.print().unwrap();
+        print!("{}", tree);
     }
 
     #[test]

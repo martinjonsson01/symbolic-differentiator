@@ -26,7 +26,7 @@ fn main() -> Result<()> {
     warn!("Starting with expression {}", args.expression);
 
     let result = interpreter::convert(args.expression)?;
-    result.print()?;
+    print!("{}", result);
 
     info!("Program finished executing!");
     Ok(())

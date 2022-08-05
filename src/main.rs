@@ -1,6 +1,11 @@
+use crate::interpreter::convert;
+use crate::interpreter::differentiator::find_derivative;
+use crate::interpreter::token::Token;
 use anyhow::Result;
 use clap::Parser;
-use log::{info, warn};
+use log::{error, info, warn};
+use std::io;
+use std::str::FromStr;
 
 mod interpreter;
 
@@ -8,8 +13,6 @@ mod interpreter;
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Arguments {
-    /// The expression to differentiate
-    expression: String,
     /// The name of the variable to differentiate with respect to
     variable: String,
     /// Whether to log additional information
@@ -23,11 +26,38 @@ fn main() -> Result<()> {
         .filter_level(args.verbose.log_level_filter())
         .init();
 
-    warn!("Starting with expression {}", args.expression);
+    // REPL (Read -> Eval -> Print -> Loop) interface
+    loop {
+        info!("Please input an expression to differentiate and press <ENTER>");
 
-    let result = interpreter::convert(args.expression)?;
-    print!("{}", result);
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
 
-    info!("Program finished executing!");
+        if input == "q" {
+            break;
+        }
+
+        let expression = convert(input)?;
+
+        info!(
+            "Differentiating expression {} with respect to {}",
+            expression, args.variable
+        );
+
+        let variable = match Token::from_str(&args.variable) {
+            Ok(variable) => variable,
+            Err(_) => {
+                error!("Could not convert {} to a valid token", args.variable);
+                continue;
+            }
+        };
+        let derivative = find_derivative(expression, &variable)?;
+        let derivative_expression = derivative.to_infix()?;
+        let derivative_text = interpreter::tokens_to_string(derivative_expression)?;
+
+        info!("Derivative is {}", derivative_text)
+    }
+
+    info!("Exiting...");
     Ok(())
 }

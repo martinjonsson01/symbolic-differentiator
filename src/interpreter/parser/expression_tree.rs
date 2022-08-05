@@ -3,6 +3,8 @@ use anyhow::{bail, Context, Result};
 use ptree::{print_tree, TreeBuilder};
 use slotmap::{new_key_type, SlotMap};
 use std::fmt::{Debug, Display};
+use std::mem::swap;
+use std::path::Component::ParentDir;
 
 new_key_type! { pub struct TokenKey; }
 
@@ -20,7 +22,7 @@ pub struct ExpressionTree<S: Debug> {
     state: S,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct TokenNode {
     token: Token,
     parent: Option<TokenKey>,
@@ -48,8 +50,12 @@ fn node_eq(
     }
     let node1 = maybe_node1.expect("Value should logically exist by now");
     let node2 = maybe_node2.expect("Value should logically exist by now");
-    if tree1.token_of(node1) != tree2.token_of(node2) {
-        return false;
+    if let Ok(token1) = tree1.token_of(node1) {
+        if let Ok(token2) = tree2.token_of(node2) {
+            if token1 != token2 {
+                return false;
+            }
+        }
     }
 
     let node1_left = tree1.left_child_of(node1);
@@ -114,6 +120,12 @@ impl<S: Debug> ExpressionTree<S> {
         }
     }
 
+    pub fn set_parent(&mut self, key: TokenKey, parent: TokenKey) -> Result<()> {
+        let mut node = self.nodes.get_mut(key).context("Could not find key in tree")?;
+        node.set_parent(parent);
+        Ok(())
+    }
+
     pub fn left_child_of(&self, node: TokenKey) -> Option<TokenKey> {
         let node = self.nodes.get(node)?;
         node.left
@@ -127,12 +139,6 @@ impl<S: Debug> ExpressionTree<S> {
     pub fn add_node(&mut self, token: Token) -> TokenKey {
         let node = TokenNode::new(token);
         self.nodes.insert(node)
-    }
-    
-    pub fn set_parent(&mut self, key: TokenKey, parent: TokenKey) -> Result<()> {
-        let mut node = self.nodes.get_mut(key).context("Could not find key in tree")?;
-        node.parent = Some(parent);
-        Ok(())
     }
 
     pub fn add_node_children(&mut self, token: Token, left: TokenKey, right: TokenKey) -> Result<TokenKey> {
@@ -155,9 +161,31 @@ impl ExpressionTree<Valid> {
         self.state.root_key
     }
 
-    pub fn token_of(&self, key: TokenKey) -> Option<&Token> {
-        let node = self.nodes.get(key)?;
-        Some(&node.token)
+    pub fn token_of(&self, key: TokenKey) -> Result<&Token> {
+        let node = self.node_of(key)?;
+        Ok(&node.token)
+    }
+
+    pub fn mut_token_of(&mut self, key: TokenKey) -> Result<&mut Token> {
+        let node = self.mut_node_of(key)?;
+        Ok(&mut node.token)
+    }
+
+    fn node_of(&self, key: TokenKey) -> Result<&TokenNode> {
+        let node = self.nodes.get(key).context("Could not find node in tree")?;
+        Ok(&node)
+    }
+
+    fn mut_node_of(&mut self, key: TokenKey) -> Result<&mut TokenNode> {
+        let node = self.nodes.get_mut(key).context("Could not find node in tree")?;
+        Ok(node)
+    }
+    
+    pub fn clone_node_of(&mut self, key: TokenKey) -> Result<TokenKey> {
+        let node = self.node_of(key)?;
+        let cloned = node.clone();
+        let cloned_key = self.nodes.insert(cloned);
+        Ok(cloned_key)
     }
 
     pub fn is_leaf(&self, key: TokenKey) -> bool {
@@ -165,6 +193,11 @@ impl ExpressionTree<Valid> {
             None => false,
             Some(node) => node.left.is_none() && node.right.is_none(),
         }
+    }
+
+    pub fn get_parent_of(&self, key: TokenKey) -> Result<TokenKey> {
+        let node = self.node_of(key)?;
+        node.parent.context("Node has not parent")
     }
 
     pub fn to_infix(&self) -> Result<Vec<Token>> {
@@ -179,9 +212,7 @@ impl ExpressionTree<Valid> {
             tokens.append(&mut subtree_tokens);
         }
 
-        let token = self
-            .token_of(node)
-            .context("Could not find token of node key in tree")?;
+        let token = self.token_of(node)?;
         tokens.push(token.clone());
 
         if let Some(right_node) = self.right_child_of(node) {
@@ -194,9 +225,9 @@ impl ExpressionTree<Valid> {
 
     fn build_expression_subtree(&self, node: TokenKey, child_node: TokenKey) -> Result<Vec<Token>> {
         let mut subtree_tokens: Vec<Token> = Vec::new();
-        if let Some(Token::Operator(other_operator)) = self.token_of(child_node) {
+        if let Ok(Token::Operator(other_operator)) = self.token_of(child_node) {
             let mut close_parentheses = false;
-            if let Some(Token::Operator(operator)) = self.token_of(node) {
+            if let Ok(Token::Operator(operator)) = self.token_of(node) {
                 // When a child operator has lower precedence, it and its operands needs
                 // to be wrapped in parentheses.
                 if operator > other_operator {
@@ -214,9 +245,7 @@ impl ExpressionTree<Valid> {
                 subtree_tokens.push(Token::CloseParenthesis);
             }
         } else {
-            let child_token = self
-                .token_of(child_node)
-                .context("Could not find token of node key in tree")?;
+            let child_token = self.token_of(child_node)?;
             subtree_tokens.push(child_token.clone());
         }
         Ok(subtree_tokens)
@@ -230,8 +259,8 @@ impl ExpressionTree<Valid> {
 
     fn write_node(&self, node: TokenKey, builder: &mut TreeBuilder) {
         let node_name = match self.token_of(node) {
-            None => return,
-            Some(token) => {
+            Err(_) => return,
+            Ok(token) => {
                 format!("{}", token)
             }
         };
@@ -274,6 +303,10 @@ impl TokenNode {
         }
     }
 
+    fn set_parent(&mut self, node_key: TokenKey) {
+        self.parent = Some(node_key);
+    }
+    
     fn set_left(&mut self, node_key: TokenKey) {
         self.left = Some(node_key);
     }

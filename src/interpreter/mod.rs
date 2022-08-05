@@ -2,6 +2,7 @@ pub mod lexer;
 mod operator;
 mod parser;
 mod token;
+mod differentiator;
 
 use crate::interpreter::parser::expression_tree::{ExpressionTree, Valid};
 use crate::interpreter::token::Token;

@@ -3,7 +3,7 @@ mod operator;
 mod parser;
 mod token;
 
-use crate::interpreter::parser::expression_tree::ExpressionTree;
+use crate::interpreter::parser::expression_tree::{ExpressionTree, Valid};
 use crate::interpreter::token::Token;
 use anyhow::{Context, Result};
 use string_builder::Builder;
@@ -23,7 +23,7 @@ use string_builder::Builder;
 /// let tree = convert(expression.into())?;
 /// let regenerated_tokens = tree.to_infix();
 /// ```
-pub fn convert(expression: String) -> Result<ExpressionTree> {
+pub fn convert(expression: String) -> Result<ExpressionTree<Valid>> {
     let tokens = lexer::tokenize(expression)?;
     let expression_tree = parser::parse(tokens)?;
     Ok(expression_tree)

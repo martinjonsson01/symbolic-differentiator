@@ -1,18 +1,53 @@
 use crate::interpreter::token::Token;
 use anyhow::{bail, Context, Result};
 use ptree::{print_tree, TreeBuilder};
-use std::rc::Rc;
+use slotmap::{new_key_type, SlotMap};
 
-#[derive(PartialEq, Debug)]
+new_key_type! { struct TokenKey; }
+
+#[derive(Debug)]
 pub struct ExpressionTree {
-    root: TokenNode,
+    nodes: SlotMap<TokenKey, TokenNode>,
+    root_key: TokenKey,
 }
 
-#[derive(PartialEq, Debug)]
-struct TokenNode {
-    value: Token,
-    left: Option<Rc<TokenNode>>,
-    right: Option<Rc<TokenNode>>,
+#[derive(Debug)]
+pub struct TokenNode {
+    token: Token,
+    left: Option<TokenKey>,
+    right: Option<TokenKey>,
+}
+
+impl PartialEq for ExpressionTree {
+    fn eq(&self, other: &Self) -> bool {
+        node_eq(self, other, Some(self.root()), Some(other.root()))
+    }
+}
+
+fn node_eq(
+    tree1: &ExpressionTree,
+    tree2: &ExpressionTree,
+    maybe_node1: Option<&TokenNode>,
+    maybe_node2: Option<&TokenNode>,
+) -> bool {
+    if maybe_node1.is_none() && maybe_node2.is_none() {
+        return true;
+    }
+    if maybe_node1.is_none() || maybe_node2.is_none() {
+        return false;
+    }
+    let node1 = maybe_node1.expect("Value should logically exist by now");
+    let node2 = maybe_node2.expect("Value should logically exist by now");
+    if node1.token != node2.token {
+        return false;
+    }
+
+    let node1_left = tree1.left_child_of(node1);
+    let node1_right = tree1.right_child_of(node1);
+    let node2_left = tree2.left_child_of(node2);
+    let node2_right = tree2.right_child_of(node2);
+
+    node_eq(tree1, tree2, node1_left, node2_left) && node_eq(tree1, tree2, node1_right, node2_right)
 }
 
 impl ExpressionTree {
@@ -24,61 +59,84 @@ impl ExpressionTree {
     ///
     /// returns: The generated expression tree.
     pub fn new(postfix_tokens: Vec<Token>) -> Result<ExpressionTree> {
+        let mut nodes = SlotMap::with_key();
+
         let mut tokens = postfix_tokens.clone();
         tokens.reverse();
-        let mut operands: Vec<TokenNode> = Vec::new();
+        let mut operand_keys: Vec<TokenKey> = Vec::new();
 
         while let Some(token) = tokens.pop() {
             match token {
                 Token::Operator(_) => {
-                    let second_operand = operands.pop().context("Expected a second operand")?;
-                    let first_operand = operands.pop().context("Expected a first operand")?;
+                    let second_operand_key =
+                        operand_keys.pop().context("Expected a second operand")?;
+                    let first_operand_key =
+                        operand_keys.pop().context("Expected a first operand")?;
 
-                    let mut operator_node = TokenNode::new(token);
-                    operator_node.set_left(first_operand);
-                    operator_node.set_right(second_operand);
+                    let operator_node =
+                        TokenNode::new_children(token, first_operand_key, second_operand_key);
+                    let operator_key = nodes.insert(operator_node);
 
-                    operands.push(operator_node);
+                    operand_keys.push(operator_key);
                 }
-                Token::Literal(_) | Token::Identifier(_) => operands.push(TokenNode::new(token)),
+                Token::Literal(_) | Token::Identifier(_) => {
+                    let node = TokenNode::new(token);
+                    let node_key = nodes.insert(node);
+                    operand_keys.push(node_key);
+                }
                 Token::OpenParenthesis | Token::CloseParenthesis => {
                     bail!("There should not be any parenthesis present in the input")
                 }
             }
         }
 
-        Ok(ExpressionTree {
-            root: operands.pop().context("No tree root found")?,
-        })
+        let root_key = operand_keys.pop().context("No tree root found")?;
+        Ok(ExpressionTree { nodes, root_key })
+    }
+
+    pub fn root(&self) -> &TokenNode {
+        self.nodes
+            .get(self.root_key)
+            .expect("Tree is missing root node")
+    }
+
+    pub fn left_child_of(&self, node: &TokenNode) -> Option<&TokenNode> {
+        let left_key = node.left?;
+        self.nodes.get(left_key)
+    }
+
+    pub fn right_child_of(&self, node: &TokenNode) -> Option<&TokenNode> {
+        let right_key = node.right?;
+        self.nodes.get(right_key)
     }
 
     pub fn to_infix(&self) -> Vec<Token> {
-        Self::build_expression(&self.root)
+        self.build_expression(self.root())
     }
 
-    fn build_expression(node: &TokenNode) -> Vec<Token> {
+    fn build_expression(&self, node: &TokenNode) -> Vec<Token> {
         let mut tokens: Vec<Token> = Vec::new();
 
-        if let Some(left_node) = &node.left {
-            let mut subtree_tokens = Self::build_expression_subtree(&node, &left_node);
+        if let Some(left_node) = self.left_child_of(node) {
+            let mut subtree_tokens = self.build_expression_subtree(&node, &left_node);
             tokens.append(&mut subtree_tokens);
         }
 
-        tokens.push(node.value.clone());
+        tokens.push(node.token.clone());
 
-        if let Some(right_node) = &node.right {
-            let mut subtree_tokens = Self::build_expression_subtree(&node, &right_node);
+        if let Some(right_node) = self.right_child_of(node) {
+            let mut subtree_tokens = self.build_expression_subtree(&node, &right_node);
             tokens.append(&mut subtree_tokens);
         }
 
         tokens
     }
 
-    fn build_expression_subtree(node: &TokenNode, left_node: &TokenNode) -> Vec<Token> {
+    fn build_expression_subtree(&self, node: &TokenNode, left_node: &TokenNode) -> Vec<Token> {
         let mut subtree_tokens: Vec<Token> = Vec::new();
-        if let Token::Operator(other_operator) = &left_node.value {
+        if let Token::Operator(other_operator) = &left_node.token {
             let mut close_parentheses = false;
-            if let Token::Operator(operator) = &node.value {
+            if let Token::Operator(operator) = &node.token {
                 // When a child operator has lower precedence, it and its operands needs
                 // to be wrapped in parentheses.
                 if operator > other_operator {
@@ -89,61 +147,69 @@ impl ExpressionTree {
 
             // Recurse so that the entire subtree will be contained within
             // any potential parentheses.
-            let mut left_tokens = Self::build_expression(&left_node);
+            let mut left_tokens = self.build_expression(&left_node);
             subtree_tokens.append(&mut left_tokens);
 
             if close_parentheses {
                 subtree_tokens.push(Token::CloseParenthesis);
             }
         } else {
-            subtree_tokens.push(left_node.value.clone());
+            subtree_tokens.push(left_node.token.clone());
         }
         subtree_tokens
     }
 
     pub fn print(&self) -> Result<()> {
         let mut builder = TreeBuilder::new("expression".into());
-        write_node(&self.root, &mut builder);
+        self.write_node(self.root(), &mut builder);
         print_tree(&builder.build()).context("Failed to build tree string")
     }
-}
 
-fn write_node(node: &TokenNode, builder: &mut TreeBuilder) {
-    let node_name = format!("{}", &node.value);
+    fn write_node(&self, node: &TokenNode, builder: &mut TreeBuilder) {
+        let node_name = format!("{}", &node.token);
 
-    if node.is_leaf() {
-        builder.add_empty_child(node_name);
-        return;
+        if node.is_leaf() {
+            builder.add_empty_child(node_name);
+            return;
+        }
+
+        builder.begin_child(node_name);
+
+        match self.left_child_of(node) {
+            None => {}
+            Some(left_node) => self.write_node(&left_node, builder),
+        };
+        match self.right_child_of(node) {
+            None => {}
+            Some(right_node) => self.write_node(&right_node, builder),
+        };
+        builder.end_child();
     }
-
-    builder.begin_child(node_name);
-
-    match &node.left {
-        None => {}
-        Some(left_node) => write_node(&left_node, builder),
-    };
-    match &node.right {
-        None => {}
-        Some(right_node) => write_node(&right_node, builder),
-    };
-    builder.end_child();
 }
 
 impl TokenNode {
     fn new(token: Token) -> TokenNode {
         TokenNode {
-            value: token,
+            token,
             left: None,
             right: None,
         }
     }
 
-    fn set_left(&mut self, node: TokenNode) {
-        self.left = Some(Rc::new(node));
+    fn new_children(token: Token, left: TokenKey, right: TokenKey) -> TokenNode {
+        TokenNode {
+            token,
+            left: Some(left),
+            right: Some(right),
+        }
     }
 
-    fn set_right(&mut self, node: TokenNode) {
-        self.right = Some(Rc::new(node));
+    fn set_left(&mut self, node_key: TokenKey) {
+        self.left = Some(node_key);
+    }
+
+    fn set_right(&mut self, node_key: TokenKey) {
+        self.right = Some(node_key);
     }
 
     fn is_leaf(&self) -> bool {
@@ -203,17 +269,15 @@ mod tests {
     }
 
     fn create_simple_tree() -> ExpressionTree {
-        let mut expected_tree = ExpressionTree {
-            root: TokenNode::new("+".parse().unwrap()),
-        };
-        expected_tree
-            .root
-            .set_left(TokenNode::new(Token::Identifier("x".into())));
-        expected_tree
-            .root
-            .set_right(TokenNode::new(Token::Identifier("y".into())));
-        let expected_tree = expected_tree;
-        expected_tree
+        let mut nodes = SlotMap::with_key();
+        let x = nodes.insert(TokenNode::new(Token::Identifier("x".into())));
+        let y = nodes.insert(TokenNode::new(Token::Identifier("y".into())));
+        let plus = nodes.insert(TokenNode::new_children("+".parse().unwrap(), x, y));
+
+        ExpressionTree {
+            nodes,
+            root_key: plus,
+        }
     }
 
     fn create_simple_postfix_tokens() -> Vec<Token> {
@@ -269,24 +333,22 @@ mod tests {
     }
 
     fn create_complex_tree() -> ExpressionTree {
-        let mut expected_tree = ExpressionTree {
-            root: TokenNode::new("+".parse().unwrap()),
-        };
-        expected_tree
-            .root
-            .set_left(TokenNode::new(Token::Identifier("x".into())));
+        let mut nodes = SlotMap::with_key();
+        let x = nodes.insert(TokenNode::new(Token::Identifier("x".into())));
+        let y = nodes.insert(TokenNode::new(Token::Identifier("y".into())));
+        let z = nodes.insert(TokenNode::new(Token::Identifier("z".into())));
+        let a = nodes.insert(TokenNode::new(Token::Identifier("a".into())));
+        let second_plus = nodes.insert(TokenNode::new_children("+".parse().unwrap(), y, z));
+        let star = nodes.insert(TokenNode::new_children(
+            "*".parse().unwrap(),
+            second_plus,
+            a,
+        ));
+        let first_plus = nodes.insert(TokenNode::new_children("+".parse().unwrap(), x, star));
 
-        let mut right_node = TokenNode::new("*".parse().unwrap());
-        right_node.set_right(TokenNode::new(Token::Identifier("a".into())));
-
-        let mut right_left_node = TokenNode::new("+".parse().unwrap());
-        right_left_node.set_left(TokenNode::new(Token::Identifier("y".into())));
-        right_left_node.set_right(TokenNode::new(Token::Identifier("z".into())));
-
-        right_node.set_left(right_left_node);
-
-        expected_tree.root.set_right(right_node);
-
-        expected_tree
+        ExpressionTree {
+            nodes,
+            root_key: first_plus,
+        }
     }
 }

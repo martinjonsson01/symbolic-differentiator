@@ -112,6 +112,8 @@ impl<S: Debug> ExpressionTree<S> {
     }
 
     pub fn set_root(self, new_root: TokenKey) -> ExpressionTree<Valid> {
+        // TODO: implement "root-node" that is always present, with a single child
+        // TODO: being the start of the real tree 
         ExpressionTree {
             nodes: self.nodes,
             state: Valid { root_key: new_root },

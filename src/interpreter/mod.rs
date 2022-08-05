@@ -74,7 +74,7 @@ mod interpreter_tests {
         let expression = "a + b";
 
         let tree = convert(expression.into()).unwrap();
-        let regenerated_tokens = tree.to_infix();
+        let regenerated_tokens = tree.to_infix().unwrap();
         let regenerated_expression = tokens_to_string(regenerated_tokens).unwrap();
 
         assert_eq!(regenerated_expression, expression)
@@ -85,7 +85,7 @@ mod interpreter_tests {
         let expression = "a + b * (c - d) / e^2";
 
         let tree = convert(expression.into()).unwrap();
-        let regenerated_tokens = tree.to_infix();
+        let regenerated_tokens = tree.to_infix().unwrap();
         let regenerated_expression = tokens_to_string(regenerated_tokens).unwrap();
 
         assert_eq!(regenerated_expression, expression)
@@ -97,7 +97,7 @@ mod interpreter_tests {
         let expected_expression = "a + b * (c - d) / e^2";
 
         let tree = convert(redundant_expression.into()).unwrap();
-        let regenerated_tokens = tree.to_infix();
+        let regenerated_tokens = tree.to_infix().unwrap();
         let regenerated_expression = tokens_to_string(regenerated_tokens).unwrap();
 
         assert_eq!(regenerated_expression, expected_expression)

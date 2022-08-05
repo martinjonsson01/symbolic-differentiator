@@ -119,7 +119,7 @@ impl<S: Debug> ExpressionTree<S> {
     }
 
     pub fn set_parent(&mut self, key: TokenKey, parent: TokenKey) -> Result<()> {
-        let mut node = self
+        let node = self
             .nodes
             .get_mut(key)
             .context("Could not find key in tree")?;
@@ -157,12 +157,6 @@ impl<S: Debug> ExpressionTree<S> {
 }
 
 impl ExpressionTree<Valid> {
-    fn root(&self) -> &TokenNode {
-        self.nodes
-            .get(self.state.root_key)
-            .expect("A valid Expression Tree should have a root")
-    }
-
     pub fn root_key(&self) -> TokenKey {
         self.state.root_key
     }

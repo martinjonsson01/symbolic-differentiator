@@ -120,38 +120,7 @@ mod tests {
     use crate::interpreter::{convert, tokens_to_string};
     use parameterized_macro::parameterized;
 
-    #[parameterized(
-    expression = {
-    "x + y",    // case_0
-    "x^0",      // case_1
-    "1 * x",    // case_2
-    "x^1",      // case_3
-    "0 * x",    // case_4
-    "x * 0",    // case_5
-    "1 + 1",    // case_6
-    "2 - 1",    // case_7
-    "3 * 4",    // case_8
-    "8 / 4",    // case_9
-    "10 ^ 2",   // case_10
-    },
-    expected_simplification = {
-    "x + y",    // case_0
-    "1",        // case_1
-    "x",        // case_2
-    "x",        // case_3
-    "0",        // case_4
-    "0",        // case_5
-    "2",        // case_6
-    "1",        // case_7
-    "12",       // case_8
-    "2",        // case_9
-    "100",      // case_10
-    }
-    )]
-    fn simplify_expression_returns_correct_simplification(
-        expression: &str,
-        expected_simplification: &str,
-    ) {
+    fn simplify_expression_returns_expected(expression: &str, expected_simplification: &str) {
         /* Not part of test, only used to simplify parameters by not using tree structs. */
         let expression_tree = convert(expression.to_string()).unwrap();
         /* End */
@@ -164,5 +133,63 @@ mod tests {
         /* End */
 
         assert_eq!(actual_simplification, expected_simplification);
+    }
+
+    #[parameterized(
+    expression = {
+    "x + y",
+    }
+    )]
+    fn simplify_non_simplifiable_expression_returns_original(expression: &str) {
+        simplify_expression_returns_expected(expression, expression)
+    }
+
+    #[parameterized(
+    expression = {
+    "x^0",
+    }
+    )]
+    fn simplify_power_of_zero_returns_one(expression: &str) {
+        simplify_expression_returns_expected(expression, "1")
+    }
+
+    #[parameterized(
+    expression = {
+    "1 * x",
+    "x^1",
+    }
+    )]
+    fn simplify_identity_operation_returns_original(expression: &str) {
+        simplify_expression_returns_expected(expression, "x")
+    }
+
+    #[parameterized(
+    expression = {
+    "0 * x",
+    "x * 0",
+    }
+    )]
+    fn simplify_zero_property_returns_zero(expression: &str) {
+        simplify_expression_returns_expected(expression, "0")
+    }
+
+    #[parameterized(
+    expression = {
+    "1 + 1",
+    "2 - 1",
+    "3 * 4",
+    "8 / 4",
+    "10 ^ 2",
+    },
+    expected_simplification = {
+    "2",
+    "1",
+    "12",
+    "2",
+    "100",
+    }
+    )]
+    fn simplify_literal_expression_evaluates_it(expression: &str, expected_simplification: &str) {
+        simplify_expression_returns_expected(expression, expected_simplification)
     }
 }

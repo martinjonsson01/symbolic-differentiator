@@ -11,17 +11,28 @@ pub fn simplify(mut tree: ExpressionTree<Valid>) -> Result<ExpressionTree<Valid>
 }
 
 fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: TokenKey) -> Result<TokenKey> {
+    
+    if tree.is_leaf(node) {
+        return Ok(node);
+    }
+    
+    let left_child = tree
+        .left_child_of(node)
+        .context("Expected a left operand")?;
+    let right_child = tree
+        .right_child_of(node)
+        .context("Expected a right operand")?;
+    
+    // Simplify both subtrees before trying to simplify current node.
+    let left_simplified = simplify_subtree(tree, left_child)?;
+    let right_simplified = simplify_subtree(tree, right_child)?;
+    tree.set_children_of(node, left_simplified, right_simplified)?;
+
     match tree.token_of(node) {
         Ok(Token::Operator(operator)) => {
-            let left_child = tree
-                .left_child_of(node)
-                .context("Expected a left operand")?;
-            let left_token = tree.token_of(left_child)?;
-            let right_child = tree
-                .right_child_of(node)
-                .context("Expected a right operand")?;
-            let right_token = tree.token_of(right_child)?;
-            let children = vec![left_child, right_child];
+            let left_token = tree.token_of(left_simplified)?;
+            let right_token = tree.token_of(right_simplified)?;
+            let children = vec![left_simplified, right_simplified];
 
             let evaluate = operator.evaluate;
             let left_token = left_token.clone();
@@ -147,10 +158,15 @@ mod tests {
         assert_eq!(actual_simplification, expected_simplification);
     }
 
+    #[test]
+    fn simplify_identity_operation_returns_original() {
+        simplify_expression_returns_expected("1 + 1 + 1 + 1", "4")
+    }
+
     #[parameterized(
     expression = {
     "x + y",
-    "(x + y) + (z + a)"
+    "(x + y) * (z + a)"
     }
     )]
     fn simplify_non_simplifiable_expression_returns_original(expression: &str) {

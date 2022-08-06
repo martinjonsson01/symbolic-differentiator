@@ -217,6 +217,13 @@ impl ExpressionTree<Valid> {
         *child_ref = Some(new_child);
         Ok(())
     }
+    
+    pub fn set_children_of(&mut self, key: TokenKey, left_child: TokenKey, right_child: TokenKey) -> Result<()>{ 
+        let node = self.mut_node_of(key)?;
+        node.set_left(left_child);
+        node.set_right(right_child);
+        Ok(())
+    }
 
     pub fn to_infix(&self) -> Result<Vec<Token>> {
         self.build_expression(self.root_key())

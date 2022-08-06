@@ -23,7 +23,6 @@ pub struct ExpressionTree<S: Debug> {
 #[derive(Debug, Clone)]
 struct TokenNode {
     token: Token,
-    parent: Option<TokenKey>,
     left: Option<TokenKey>,
     right: Option<TokenKey>,
 }
@@ -113,20 +112,11 @@ impl<S: Debug> ExpressionTree<S> {
 
     pub fn set_root(self, new_root: TokenKey) -> ExpressionTree<Valid> {
         // TODO: implement "root-node" that is always present, with a single child
-        // TODO: being the start of the real tree 
+        // TODO: being the start of the real tree
         ExpressionTree {
             nodes: self.nodes,
             state: Valid { root_key: new_root },
         }
-    }
-
-    pub fn set_parent(&mut self, key: TokenKey, parent: TokenKey) -> Result<()> {
-        let node = self
-            .nodes
-            .get_mut(key)
-            .context("Could not find key in tree")?;
-        node.set_parent(parent);
-        Ok(())
     }
 
     pub fn left_child_of(&self, node: TokenKey) -> Option<TokenKey> {
@@ -152,8 +142,6 @@ impl<S: Debug> ExpressionTree<S> {
     ) -> Result<TokenKey> {
         let node = TokenNode::new_children(token, left, right);
         let parent_key = self.nodes.insert(node);
-        self.set_parent(left, parent_key)?;
-        self.set_parent(right, parent_key)?;
         Ok(parent_key)
     }
 }
@@ -200,25 +188,30 @@ impl ExpressionTree<Valid> {
         }
     }
 
-    pub fn get_parent_of(&self, key: TokenKey) -> Result<TokenKey> {
-        let node = self.node_of(key)?;
-        node.parent.context("Node has not parent")
-    }
-    
-    pub fn replace_child_of(&mut self, key: TokenKey, old_child: TokenKey, new_child: TokenKey) -> Result<()> {
+    pub fn replace_child_of(
+        &mut self,
+        key: TokenKey,
+        old_child: TokenKey,
+        new_child: TokenKey,
+    ) -> Result<()> {
         let node = self.mut_node_of(key)?;
         let child_ref = if node.left == Some(old_child) {
             &mut node.left
-        } else if node.right == Some(old_child){
+        } else if node.right == Some(old_child) {
             &mut node.right
         } else {
-            return Err(anyhow!("old_child is not a child of the given node"))
+            return Err(anyhow!("old_child is not a child of the given node"));
         };
         *child_ref = Some(new_child);
         Ok(())
     }
-    
-    pub fn set_children_of(&mut self, key: TokenKey, left_child: TokenKey, right_child: TokenKey) -> Result<()>{ 
+
+    pub fn set_children_of(
+        &mut self,
+        key: TokenKey,
+        left_child: TokenKey,
+        right_child: TokenKey,
+    ) -> Result<()> {
         let node = self.mut_node_of(key)?;
         node.set_left(left_child);
         node.set_right(right_child);
@@ -334,7 +327,6 @@ impl TokenNode {
     fn new(token: Token) -> TokenNode {
         TokenNode {
             token,
-            parent: None,
             left: None,
             right: None,
         }
@@ -343,14 +335,9 @@ impl TokenNode {
     fn new_children(token: Token, left: TokenKey, right: TokenKey) -> TokenNode {
         TokenNode {
             token,
-            parent: None,
             left: Some(left),
             right: Some(right),
         }
-    }
-
-    fn set_parent(&mut self, node_key: TokenKey) {
-        self.parent = Some(node_key);
     }
 
     fn set_left(&mut self, node_key: TokenKey) {

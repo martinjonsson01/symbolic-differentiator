@@ -2,6 +2,7 @@ pub mod differentiator;
 pub mod lexer;
 mod operator;
 mod parser;
+mod simplifier;
 pub mod token;
 
 use crate::find_derivative;

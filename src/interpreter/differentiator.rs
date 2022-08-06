@@ -41,7 +41,6 @@ fn differentiate_subtree(
     node: TokenKey,
     with_respect_to: &Token,
 ) -> Result<TokenKey> {
-    let mut root = tree.root_key();
     match tree.token_of(node) {
         Ok(Token::Operator(operator)) => {
             let left_child = tree
@@ -52,31 +51,22 @@ fn differentiate_subtree(
                 .context("Expected a right operand")?;
             let children = vec![left_child, right_child];
 
-            if operator.symbol == "^" {
-                let left_token = tree.token_of(left_child)?;
-                if left_token != with_respect_to {
+            return if operator.symbol == "^" {
+                let base = tree.token_of(left_child)?;
+                if base != with_respect_to {
                     bail!("Can not differentiate with respect to this variable")
                 }
 
-                let maybe_parent = tree.get_parent_of(node);
-
-                let cloned_right_operand = tree.clone_node_of(right_child)?;
-                let multiply_node =
-                    tree.add_node_children("*".parse().unwrap(), cloned_right_operand, node)?;
-
-                match maybe_parent {
-                    Ok(parent) => tree.set_parent(multiply_node, parent)?,
-                    Err(_) => {
-                        // This means that we're at the root node.
-                        root = multiply_node;
-                    }
-                }
+                let exponent = tree.clone_node_of(right_child)?;
+                let multiply_node = tree.add_node_children("*".parse().unwrap(), exponent, node)?;
 
                 mutate_literal(tree, right_child, |exponent| *exponent -= 1f64)?;
+
+                Ok(multiply_node)
             } else if operator.symbol == "*" {
-                let is_literal = |key: &TokenKey| {
+                let is_value = |key: &TokenKey| {
                     if let Ok(token) = tree.token_of(*key) {
-                        if matches!(token, Token::Literal(_)) {
+                        if token.is_value() {
                             return Some(*key);
                         }
                     }
@@ -92,41 +82,19 @@ fn differentiate_subtree(
                     None
                 };
 
-                let factor_literal_key = find_matching_node(&children, is_literal)
-                    .context("Expected a literal child")?;
+                find_matching_node(&children, is_value).context("Expected a value child")?;
                 let caret_key = find_matching_node(&children, is_caret)
-                    .context("Expected a caret operator child")?;
+                    .context("Expected an exponentiation child")?;
 
-                let exponent_literal_key = tree
-                    .right_child_of(caret_key)
-                    .context("Expected a right operand")?;
-                let exponent_literal_key = is_literal(&exponent_literal_key)
-                    .context("Expected a literal right operand")?;
-
-                let variable_key = tree
-                    .left_child_of(caret_key)
-                    .context("Expected a left operand")?;
-                let variable_token = tree.token_of(variable_key)?;
-                if variable_token != with_respect_to {
-                    bail!("Can not differentiate with respect to this variable")
-                }
-
-                let mut maybe_exponent_value = None;
-                mutate_literal(tree, exponent_literal_key, |exponent|{
-                    maybe_exponent_value = Some(exponent.clone());
-                    *exponent -= 1f64
-                } )?;
-                let exponent_value = match maybe_exponent_value {
-                    None => bail!("Expected exponent to be a literal"),
-                    Some(value) => value
-                };
-                    
-                mutate_literal(tree, factor_literal_key, |factor| *factor *= exponent_value)?;
-            }
+                let new_root = differentiate_subtree(tree, caret_key, with_respect_to)?;
+                tree.replace_child_of(node, caret_key, new_root)?;
+                Ok(node)
+            } else {
+                Err(anyhow!("Could not differentiate expression"))
+            };
         }
         _ => todo![],
     }
-    Ok(root)
 }
 
 fn mutate_literal<F>(tree: &mut ExpressionTree<Valid>, key: TokenKey, mut mutate: F) -> Result<()>
@@ -190,12 +158,14 @@ mod tests {
 
         let actual_tree = find_derivative(tree, &variable).unwrap();
 
-        // 12 * x^3 (but in postfix notation)
+        // 3 * (4 * x^3) (but in postfix notation)
         let expected_tokens = vec![
-            Token::Literal(12f64),
+            Token::Literal(3f64),
+            Token::Literal(4f64),
             variable.clone(),
             Token::Literal(3f64),
             "^".parse().unwrap(),
+            "*".parse().unwrap(),
             "*".parse().unwrap(),
         ];
         let expected_tree = ExpressionTree::<Valid>::new(expected_tokens).unwrap();
@@ -218,12 +188,14 @@ mod tests {
 
         let actual_tree = find_derivative(tree, &variable).unwrap();
 
-        // x^3 * 12 (but in postfix notation)
+        // (4 * x^3) * 3 (but in postfix notation)
         let expected_tokens = vec![
+            Token::Literal(4f64),
             variable.clone(),
             Token::Literal(3f64),
             "^".parse().unwrap(),
-            Token::Literal(12f64),
+            "*".parse().unwrap(),
+            Token::Literal(3f64),
             "*".parse().unwrap(),
         ];
         let expected_tree = ExpressionTree::<Valid>::new(expected_tokens).unwrap();

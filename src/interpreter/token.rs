@@ -16,6 +16,14 @@ pub enum Token {
 
 pub static SYMBOLS: [char; 7] = ['+', '-', '*', '/', '^', '(', ')'];
 
+impl Token {
+    /// A 'value' is a token that either represents, contains or is a numerical value.
+    /// E.g. a literal or identifier.
+    pub fn is_value(&self) -> bool {
+        matches!(self, Token::Literal(_)) || matches!(self, Token::Identifier(_))
+    }
+}
+
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {

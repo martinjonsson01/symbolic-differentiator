@@ -1,5 +1,5 @@
 use crate::interpreter::token::Token;
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use ptree::{write_tree, TreeBuilder};
 use slotmap::{new_key_type, SlotMap};
 use std::fmt;
@@ -203,6 +203,19 @@ impl ExpressionTree<Valid> {
     pub fn get_parent_of(&self, key: TokenKey) -> Result<TokenKey> {
         let node = self.node_of(key)?;
         node.parent.context("Node has not parent")
+    }
+    
+    pub fn replace_child_of(&mut self, key: TokenKey, old_child: TokenKey, new_child: TokenKey) -> Result<()> {
+        let node = self.mut_node_of(key)?;
+        let child_ref = if node.left == Some(old_child) {
+            &mut node.left
+        } else if node.right == Some(old_child){
+            &mut node.right
+        } else {
+            return Err(anyhow!("old_child is not a child of the given node"))
+        };
+        *child_ref = Some(new_child);
+        Ok(())
     }
 
     pub fn to_infix(&self) -> Result<Vec<Token>> {

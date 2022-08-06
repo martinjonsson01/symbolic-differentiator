@@ -78,18 +78,15 @@ fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: TokenKey) -> Res
             } else if operator.symbol == "+" {
                 let zero_node = find_matching_node(tree, &children, |token| *token == zero);
                 let value_node =
-                    find_matching_node(tree, &children, |token| token.is_value() && *token != zero);
+                    find_matching_node(tree, &children, |token| *token != zero);
                 // x + 0 || 0 + x -> x
                 if zero_node.is_some() && value_node.is_some() {
-                    let value_token = tree.token_of(value_node.unwrap())?;
-                    let new_root = tree.add_node(value_token.clone());
-                    return Ok(new_root);
+                    return Ok(value_node.unwrap());
                 }
             } else if operator.symbol == "-" {
                 // x - 0 -> x
-                if left_token.is_value() && right_token == zero {
-                    let new_root = tree.add_node(left_token);
-                    return Ok(new_root);
+                if right_token == zero {
+                    return Ok(left_simplified);
                 }
             }
 
@@ -168,7 +165,7 @@ mod tests {
 
     #[test]
     fn simplify_identity_operation_returns_original() {
-        simplify_expression_returns_expected("1 + 1 + 1 + 1", "4")
+        simplify_expression_returns_expected("0 + x * y", "x * y")
     }
 
     #[parameterized(
@@ -252,11 +249,17 @@ mod tests {
     "(x + y) * (z + 0)",
     "(x * (y^0 + 1))^2 * (z + a)",
     "(x + 0)^(10^2 * 100) - 0 * (x + y) / (z - 0)",
+    "(x * y) - 0",
+    "(x * y) + 0",
+    "0 + (x * y)",
     },
     expected_simplification = {
     "(x + y) * z",
     "(x * 2)^2 * (z + a)",
     "x^10000",
+    "x * y",
+    "x * y",
+    "x * y",
     }
     )]
     fn simplify_nested_expressions_returns_expected(

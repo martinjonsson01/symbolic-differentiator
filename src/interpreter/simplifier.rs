@@ -29,18 +29,16 @@ fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: TokenKey) -> Res
 
             let zero = Token::Literal(0f64);
             let one = Token::Literal(1f64);
-            return if operator.symbol == "^" {
+            if operator.symbol == "^" {
                 // x^0 -> 1
                 if right_token == zero && left_token != zero {
                     let new_root = tree.add_node(one);
-                    Ok(new_root)
+                    return Ok(new_root);
                 }
                 // x^1 -> x
                 else if right_token == one && left_token != zero && left_token.is_value() {
                     let base = tree.add_node(left_token.clone());
-                    Ok(base)
-                } else {
-                    try_evaluate_as_literals(&mut tree, node, evaluate, left_token, right_token)
+                    return Ok(base);
                 }
             } else if operator.symbol == "*" {
                 let zero_node = find_matching_node(tree, &children, |token| *token == zero);
@@ -51,14 +49,12 @@ fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: TokenKey) -> Res
                 if one_node.is_some() && value_node.is_some() {
                     let value_token = tree.token_of(value_node.unwrap())?;
                     let new_root = tree.add_node(value_token.clone());
-                    Ok(new_root)
+                    return Ok(new_root);
                 }
                 // x * 0 || 0 * x -> x
                 else if zero_node.is_some() && value_node.is_some() {
                     let new_root = tree.add_node(zero);
-                    Ok(new_root)
-                } else {
-                    try_evaluate_as_literals(&mut tree, node, evaluate, left_token, right_token)
+                    return Ok(new_root);
                 }
             } else if operator.symbol == "+" {
                 let zero_node = find_matching_node(tree, &children, |token| *token == zero);
@@ -68,22 +64,17 @@ fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: TokenKey) -> Res
                 if zero_node.is_some() && value_node.is_some() {
                     let value_token = tree.token_of(value_node.unwrap())?;
                     let new_root = tree.add_node(value_token.clone());
-                    Ok(new_root)
-                } else {
-                    try_evaluate_as_literals(&mut tree, node, evaluate, left_token, right_token)
+                    return Ok(new_root);
                 }
             } else if operator.symbol == "-" {
                 // x - 0 -> x
                 if left_token.is_value() && right_token == zero {
                     let new_root = tree.add_node(left_token);
-                    Ok(new_root)
-                } else {
-                    try_evaluate_as_literals(&mut tree, node, evaluate, left_token, right_token)
+                    return Ok(new_root);
                 }
             }
-            else {
-                try_evaluate_as_literals(&mut tree, node, evaluate, left_token, right_token)
-            };
+
+            return try_evaluate_as_literals(&mut tree, node, evaluate, left_token, right_token);
         }
         _ => bail!("The given node is not an operator token in the given expression tree"),
     }
@@ -103,17 +94,17 @@ where
         Token::Literal(left_value) => {
             match right_token {
                 Token::Literal(right_value) => {
-                    // k^n -> evaluate
+                    // literal op literal -> evaluate
                     let evaluation = evaluate(left_value, right_value);
                     let literal = Token::Literal(evaluation);
                     let evaluated_node = tree.add_node(literal);
                     Ok(evaluated_node)
                 }
-                // x^y -> x^y
+                // x op y -> x op y
                 _ => Ok(node),
             }
         }
-        // x^y -> x^y
+        // x op y -> x op y
         _ => Ok(node),
     }
 }

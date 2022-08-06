@@ -59,7 +59,7 @@ fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: TokenKey) -> Res
             } else if operator.symbol == "+" {
                 let zero_node = find_matching_node(tree, &children, |token| *token == zero);
                 let value_node =
-                    find_matching_node(tree, &children, |token| token.is_value() && *token != one);
+                    find_matching_node(tree, &children, |token| token.is_value() && *token != zero);
                 // x + 0 || 0 + x -> x
                 if zero_node.is_some() && value_node.is_some() {
                     let value_token = tree.token_of(value_node.unwrap())?;
@@ -172,6 +172,7 @@ mod tests {
     "1 * x",
     "x^1",
     "x + 0",
+    "0 + x",
     "x - 0",
     }
     )]

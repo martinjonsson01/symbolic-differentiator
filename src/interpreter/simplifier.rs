@@ -60,7 +60,28 @@ fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: TokenKey) -> Res
                 } else {
                     try_evaluate_as_literals(&mut tree, node, evaluate, left_token, right_token)
                 }
-            } else {
+            } else if operator.symbol == "+" {
+                let zero_node = find_matching_node(tree, &children, |token| *token == zero);
+                let value_node =
+                    find_matching_node(tree, &children, |token| token.is_value() && *token != one);
+                // x + 0 || 0 + x -> x
+                if zero_node.is_some() && value_node.is_some() {
+                    let value_token = tree.token_of(value_node.unwrap())?;
+                    let new_root = tree.add_node(value_token.clone());
+                    Ok(new_root)
+                } else {
+                    try_evaluate_as_literals(&mut tree, node, evaluate, left_token, right_token)
+                }
+            } else if operator.symbol == "-" {
+                // x - 0 -> x
+                if left_token.is_value() && right_token == zero {
+                    let new_root = tree.add_node(left_token);
+                    Ok(new_root)
+                } else {
+                    try_evaluate_as_literals(&mut tree, node, evaluate, left_token, right_token)
+                }
+            }
+            else {
                 try_evaluate_as_literals(&mut tree, node, evaluate, left_token, right_token)
             };
         }
@@ -147,6 +168,8 @@ mod tests {
     #[parameterized(
     expression = {
     "x^0",
+    "1^0",
+    "2349872^0",
     }
     )]
     fn simplify_power_of_zero_returns_one(expression: &str) {
@@ -157,6 +180,8 @@ mod tests {
     expression = {
     "1 * x",
     "x^1",
+    "x + 0",
+    "x - 0",
     }
     )]
     fn simplify_identity_operation_returns_original(expression: &str) {
@@ -178,6 +203,7 @@ mod tests {
     "1 + 1",
     "2 - 1",
     "3 * 4",
+    "1 * 1",
     "8 / 4",
     "10 ^ 2",
     },
@@ -185,6 +211,7 @@ mod tests {
     "2",
     "1",
     "12",
+    "1",
     "2",
     "100",
     }

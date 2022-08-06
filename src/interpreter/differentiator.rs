@@ -93,7 +93,7 @@ fn differentiate_subtree(
                 Err(anyhow!("Could not differentiate expression"))
             };
         }
-        _ => todo![],
+        _ => bail!("The given node is not an operator token in the given expression tree"),
     }
 }
 

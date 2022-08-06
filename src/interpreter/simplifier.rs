@@ -11,21 +11,23 @@ pub fn simplify(mut tree: ExpressionTree<Valid>) -> Result<ExpressionTree<Valid>
 }
 
 fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: TokenKey) -> Result<TokenKey> {
-    
     if tree.is_leaf(node) {
         return Ok(node);
     }
-    
-    let left_child = tree
-        .left_child_of(node)
-        .context("Expected a left operand")?;
-    let right_child = tree
-        .right_child_of(node)
-        .context("Expected a right operand")?;
-    
+
     // Simplify both subtrees before trying to simplify current node.
-    let left_simplified = simplify_subtree(tree, left_child)?;
-    let right_simplified = simplify_subtree(tree, right_child)?;
+    let left_simplified = {
+        let left_child = tree
+            .left_child_of(node)
+            .context("Expected a left operand")?;
+        simplify_subtree(tree, left_child)?
+    };
+    let right_simplified = {
+        let right_child = tree
+            .right_child_of(node)
+            .context("Expected a right operand")?;
+        simplify_subtree(tree, right_child)?
+    };
     tree.set_children_of(node, left_simplified, right_simplified)?;
 
     match tree.token_of(node) {
@@ -64,6 +66,12 @@ fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: TokenKey) -> Res
                 }
                 // x * 0 || 0 * x -> x
                 else if zero_node.is_some() && value_node.is_some() {
+                    let new_root = tree.add_node(zero);
+                    return Ok(new_root);
+                }
+            } else if operator.symbol == "/" {
+                // 0 / x -> 0
+                if left_token == zero && right_token.is_value() && right_token != zero {
                     let new_root = tree.add_node(zero);
                     return Ok(new_root);
                 }
@@ -191,7 +199,7 @@ mod tests {
     "x + 0",
     "0 + x",
     "x - 0",
-    "1 * 1 * 1 * x"
+    "1 * 1 * 1 * x",
     }
     )]
     fn simplify_identity_operation_returns_original(expression: &str) {
@@ -202,6 +210,7 @@ mod tests {
     expression = {
     "0 * x",
     "x * 0",
+    "0 / x",
     "x * 0 * 0 * 0",
     "0 * ((x * (y^b + 1))^(1+1) * (z + a))",
     }
@@ -217,6 +226,8 @@ mod tests {
     "3 * 4",
     "1 * 1",
     "8 / 4",
+    "1 / 1",
+    "0 / 1433",
     "10 ^ 2",
     "1 + 1 + 1 + 1"
     },
@@ -226,6 +237,8 @@ mod tests {
     "12",
     "1",
     "2",
+    "1",
+    "0",
     "100",
     "4"
     }
@@ -246,7 +259,10 @@ mod tests {
     "x^10000",
     }
     )]
-    fn simplify_nested_expressions_returns_expected(expression: &str, expected_simplification: &str) {
+    fn simplify_nested_expressions_returns_expected(
+        expression: &str,
+        expected_simplification: &str,
+    ) {
         simplify_expression_returns_expected(expression, expected_simplification)
     }
 }

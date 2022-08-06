@@ -6,8 +6,39 @@ pub mod differentiator;
 
 use crate::interpreter::parser::expression_tree::{ExpressionTree, Valid};
 use crate::interpreter::token::Token;
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use string_builder::Builder;
+use crate::find_derivative;
+
+/// Calculates the derivative of the given expression with respect to the given variable.
+/// 
+/// # Arguments 
+/// 
+/// * `expression`: A text expression in infix format.
+/// * `with_respect_to`: Name of a variable present in the expression. 
+/// 
+/// returns: The derivative of the expression, in text.
+/// 
+/// # Examples 
+/// 
+/// ```
+/// let expression = "x^2";
+/// let derivative = differentiate(expression.to_string(), "x".to_string());
+/// match derivative {
+///     Ok(result) => print!("{}", derivative),
+///     Err(_) => {} 
+/// }
+/// ```
+pub fn differentiate(expression: String, with_respect_to: String) -> Result<String> {
+    let expression_tree = convert(expression)?;
+    let variable_token: Token = match with_respect_to.parse::<Token>() {
+        Ok(token) => token,
+        Err(_) => bail!("Failed to convert {} into a variable token", with_respect_to)
+    };
+    let derivative_tree = find_derivative(expression_tree, &variable_token)?;
+    let derivative_tokens = derivative_tree.to_infix()?;
+    tokens_to_string(derivative_tokens)
+}
 
 /// Converts the given input string into an equivalent expression tree,
 /// which is easier to manipulate than the original string.
@@ -24,7 +55,7 @@ use string_builder::Builder;
 /// let tree = convert(expression.into())?;
 /// let regenerated_tokens = tree.to_infix();
 /// ```
-pub fn convert(expression: String) -> Result<ExpressionTree<Valid>> {
+fn convert(expression: String) -> Result<ExpressionTree<Valid>> {
     let tokens = lexer::tokenize(expression)?;
     let expression_tree = parser::parse(tokens)?;
     Ok(expression_tree)
@@ -102,5 +133,15 @@ mod interpreter_tests {
         let regenerated_expression = tokens_to_string(regenerated_tokens).unwrap();
 
         assert_eq!(regenerated_expression, expected_expression)
+    }
+    
+    #[test]
+    fn differentiate_simple_expression_returns_correct_derivative() {
+        let expression = "x^3".to_string();
+        let expected_derivative = "3 * x^2";
+        
+        let actual_derivative = differentiate(expression, "x".to_string()).unwrap();
+        
+        assert_eq!(actual_derivative, expected_derivative);
     }
 }

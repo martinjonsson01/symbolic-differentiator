@@ -1,10 +1,11 @@
-use crate::interpreter::convert;
+use crate::interpreter::differentiate;
 use crate::interpreter::differentiator::find_derivative;
 use crate::interpreter::token::Token;
 use anyhow::Result;
 use clap::Parser;
 use log::{error, info};
 use std::io;
+use std::io::BufRead;
 use std::str::FromStr;
 
 mod interpreter;
@@ -28,36 +29,30 @@ fn main() -> Result<()> {
 
     // REPL (Read -> Eval -> Print -> Loop) interface
     loop {
-        info!("Please input an expression to differentiate and press <ENTER>");
+        println!("Please input an expression to differentiate and press <ENTER>");
 
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
+        let line = io::stdin().lock().lines().next();
+        let input = match line.and_then(|result| result.ok()) {
+            None => {
+                error!("Failed to read input, please input a correct string, or type 'q' to exit");
+                continue;
+            }
+            Some(text) => text 
+        };
 
         if input == "q" {
             break;
         }
 
-        let expression = convert(input)?;
-
-        info!(
+        println!(
             "Differentiating expression {} with respect to {}",
-            expression, args.variable
+            input, args.variable
         );
 
-        let variable = match Token::from_str(&args.variable) {
-            Ok(variable) => variable,
-            Err(_) => {
-                error!("Could not convert {} to a valid token", args.variable);
-                continue;
-            }
-        };
-        let derivative = find_derivative(expression, &variable)?;
-        let derivative_expression = derivative.to_infix()?;
-        let derivative_text = interpreter::tokens_to_string(derivative_expression)?;
-
-        info!("Derivative is {}", derivative_text)
+        let derivative = differentiate(input, args.variable.clone())?;
+        println!("Derivative is {}", derivative)
     }
 
-    info!("Exiting...");
+    println!("Exiting...");
     Ok(())
 }

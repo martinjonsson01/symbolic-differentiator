@@ -202,7 +202,8 @@ mod tests {
     expression = {
     "0 * x",
     "x * 0",
-    "x * 0 * 0 * 0"
+    "x * 0 * 0 * 0",
+    "0 * ((x * (y^b + 1))^(1+1) * (z + a))",
     }
     )]
     fn simplify_zero_property_returns_zero(expression: &str) {
@@ -230,6 +231,22 @@ mod tests {
     }
     )]
     fn simplify_literal_expression_evaluates_it(expression: &str, expected_simplification: &str) {
+        simplify_expression_returns_expected(expression, expected_simplification)
+    }
+
+    #[parameterized(
+    expression = {
+    "(x + y) * (z + 0)",
+    "(x * (y^0 + 1))^2 * (z + a)",
+    "(x + 0)^(10^2 * 100) - 0 * (x + y) / (z - 0)",
+    },
+    expected_simplification = {
+    "(x + y) * z",
+    "(x * 2)^2 * (z + a)",
+    "x^10000",
+    }
+    )]
+    fn simplify_nested_expressions_returns_expected(expression: &str, expected_simplification: &str) {
         simplify_expression_returns_expected(expression, expected_simplification)
     }
 }

@@ -150,6 +150,7 @@ mod tests {
     #[parameterized(
     expression = {
     "x + y",
+    "(x + y) + (z + a)"
     }
     )]
     fn simplify_non_simplifiable_expression_returns_original(expression: &str) {
@@ -174,6 +175,7 @@ mod tests {
     "x + 0",
     "0 + x",
     "x - 0",
+    "1 * 1 * 1 * x"
     }
     )]
     fn simplify_identity_operation_returns_original(expression: &str) {
@@ -184,6 +186,7 @@ mod tests {
     expression = {
     "0 * x",
     "x * 0",
+    "x * 0 * 0 * 0"
     }
     )]
     fn simplify_zero_property_returns_zero(expression: &str) {
@@ -198,6 +201,7 @@ mod tests {
     "1 * 1",
     "8 / 4",
     "10 ^ 2",
+    "1 + 1 + 1 + 1"
     },
     expected_simplification = {
     "2",
@@ -206,6 +210,7 @@ mod tests {
     "1",
     "2",
     "100",
+    "4"
     }
     )]
     fn simplify_literal_expression_evaluates_it(expression: &str, expected_simplification: &str) {

@@ -147,11 +147,13 @@ mod interpreter_tests {
         expression = {
             "x^3",
             "x^1",
+            "y",
             "3 * x^4",
         },
         expected_derivative = {
             "3 * x^2",
-            "1 * x^0", // will be fixed to just '1' later
+            "1",
+            "y",
             "3 * 4 * x^3",
         }
     )]

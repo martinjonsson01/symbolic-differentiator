@@ -93,6 +93,15 @@ fn differentiate_subtree(
                 Err(anyhow!("Could not differentiate expression"))
             };
         }
+        Ok(Token::Identifier(variable_name)) => {
+            if *variable_name == with_respect_to.to_string() {
+                let one = Token::Literal(1f64);
+                let one_node = tree.add_node(one);
+                Ok(one_node)
+            } else {
+                Ok(node)
+            }
+        }
         _ => bail!("The given node is not an operator token in the given expression tree"),
     }
 }

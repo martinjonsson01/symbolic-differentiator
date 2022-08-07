@@ -10,6 +10,7 @@ use crate::interpreter::parser::expression_tree::{ExpressionTree, Valid};
 use crate::interpreter::token::Token;
 use anyhow::{bail, Context, Result};
 use string_builder::Builder;
+use crate::interpreter::simplifier::simplify;
 
 /// Calculates the derivative of the given expression with respect to the given variable.
 ///
@@ -39,8 +40,10 @@ pub fn differentiate(expression: String, with_respect_to: String) -> Result<Stri
             with_respect_to
         ),
     };
-    let derivative_tree = find_derivative(expression_tree, &variable_token)?;
-    let derivative_tokens = derivative_tree.to_infix()?;
+    let simplified_expression = simplify(expression_tree)?;
+    let derivative = find_derivative(simplified_expression, &variable_token)?;
+    let simplified_derivative = simplify(derivative)?;
+    let derivative_tokens = simplified_derivative.to_infix()?;
     tokens_to_string(derivative_tokens)
 }
 

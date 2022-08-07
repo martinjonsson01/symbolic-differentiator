@@ -1,8 +1,26 @@
-use crate::interpreter::operator::Operator;
 use crate::interpreter::parser::expression_tree::{ExpressionTree, TokenKey, Valid};
 use crate::Token;
-use anyhow::{anyhow, bail, Context, Error, Result};
+use anyhow::{bail, Context, Error, Result};
 
+/// Simplifies a given expression tree. 
+/// 
+/// **NOTE:**
+/// This does not guarantee a complete mathematical simplification, as not all possible
+/// types of simplifiable patterns are implemented.
+/// 
+/// # Arguments 
+/// 
+/// * `tree`: A valid expression tree.
+/// 
+/// returns: A simplified (or the input) expression tree. 
+/// 
+/// # Examples 
+/// 
+/// ```
+/// let expression_tree = convert(expression.to_string())?;
+///
+/// let simplified_tree = simplify(expression_tree)?;
+/// ```
 pub fn simplify(mut tree: ExpressionTree<Valid>) -> Result<ExpressionTree<Valid>> {
     let root_key = tree.root_key();
     let new_root = simplify_subtree(&mut tree, root_key)?;
@@ -77,8 +95,7 @@ fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: TokenKey) -> Res
                 }
             } else if operator.symbol == "+" {
                 let zero_node = find_matching_node(tree, &children, |token| *token == zero);
-                let value_node =
-                    find_matching_node(tree, &children, |token| *token != zero);
+                let value_node = find_matching_node(tree, &children, |token| *token != zero);
                 // x + 0 || 0 + x -> x
                 if zero_node.is_some() && value_node.is_some() {
                     return Ok(value_node.unwrap());

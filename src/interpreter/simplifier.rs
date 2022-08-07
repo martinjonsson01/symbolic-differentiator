@@ -1,6 +1,7 @@
 use crate::interpreter::parser::expression_tree::{ExpressionTree, TokenKey, Valid};
 use crate::Token;
 use anyhow::{bail, Context, Error, Result};
+use crate::interpreter::find_matching_node;
 
 /// Simplifies a given expression tree. 
 /// 
@@ -138,23 +139,6 @@ where
         // x op y -> x op y
         _ => Ok(node),
     }
-}
-
-fn find_matching_node<F>(
-    tree: &mut ExpressionTree<Valid>,
-    keys: &Vec<TokenKey>,
-    predicate: F,
-) -> Option<TokenKey>
-where
-    F: Fn(&Token) -> bool,
-{
-    for child_key in keys {
-        let token = tree.token_of(*child_key).ok()?;
-        if predicate(token) {
-            return Some(*child_key);
-        }
-    }
-    None
 }
 
 #[cfg(test)]

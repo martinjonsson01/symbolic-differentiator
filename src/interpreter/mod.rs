@@ -6,7 +6,7 @@ mod simplifier;
 pub mod token;
 
 use crate::find_derivative;
-use crate::interpreter::parser::expression_tree::{ExpressionTree, Valid};
+use crate::interpreter::parser::expression_tree::{ExpressionTree, TokenKey, Valid};
 use crate::interpreter::token::Token;
 use anyhow::{bail, Context, Result};
 use string_builder::Builder;
@@ -104,6 +104,23 @@ pub fn tokens_to_string(tokens: Vec<Token>) -> Result<String> {
     builder.string().context("Failed to build token string")
 }
 
+fn find_matching_node<F>(
+    tree: &mut ExpressionTree<Valid>,
+    keys: &Vec<TokenKey>,
+    predicate: F,
+) -> Option<TokenKey>
+    where
+        F: Fn(&Token) -> bool,
+{
+    for child_key in keys {
+        let token = tree.token_of(*child_key).ok()?;
+        if predicate(token) {
+            return Some(*child_key);
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod interpreter_tests {
     use super::*;
@@ -148,12 +165,14 @@ mod interpreter_tests {
             "x^3",
             "x^1",
             "y",
+            "x^y",
             "3 * x^4",
         },
         expected_derivative = {
             "3 * x^2",
             "1",
             "y",
+            "y * x^(y - 1)",
             "3 * 4 * x^3",
         }
     )]

@@ -22,6 +22,11 @@ impl Token {
     pub fn is_value(&self) -> bool {
         matches!(self, Token::Literal(_)) || matches!(self, Token::Identifier(_))
     }
+    
+    pub fn is_caret(&self) -> bool {
+        let caret = "^".to_string();
+        matches!(self, Token::Operator(Operator { symbol: caret, .. }))
+    }
 }
 
 impl fmt::Display for Token {

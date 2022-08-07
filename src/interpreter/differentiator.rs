@@ -1,6 +1,6 @@
 use crate::interpreter::operator::Operator;
 use crate::interpreter::parser::expression_tree::{ExpressionTree, TokenKey, Valid};
-use crate::interpreter::Token;
+use crate::interpreter::{find_matching_node, Token};
 use anyhow::{anyhow, bail, Context, Result};
 
 /// Differentiates the given expression tree with respect to the given variable.
@@ -64,26 +64,9 @@ fn differentiate_subtree(
 
                 Ok(multiply_node)
             } else if operator.symbol == "*" {
-                let is_value = |key: &TokenKey| {
-                    if let Ok(token) = tree.token_of(*key) {
-                        if token.is_value() {
-                            return Some(*key);
-                        }
-                    }
-                    None
-                };
-                let is_caret = |key: &TokenKey| {
-                    if let Ok(token) = tree.token_of(*key) {
-                        let _caret = "^".to_string();
-                        if matches!(token, Token::Operator(Operator { symbol: _caret, .. })) {
-                            return Some(*key);
-                        }
-                    }
-                    None
-                };
-
-                find_matching_node(&children, is_value).context("Expected a value child")?;
-                let caret_key = find_matching_node(&children, is_caret)
+                find_matching_node(tree, &children, |token| token.is_value())
+                    .context("Expected a value child")?;
+                let caret_key = find_matching_node(tree, &children, |token| token.is_caret())
                     .context("Expected an exponentiation child")?;
 
                 let new_root = differentiate_subtree(tree, caret_key, with_respect_to)?;
@@ -116,13 +99,6 @@ where
         return Ok(());
     }
     Err(anyhow!("Token is not a literal"))
-}
-
-fn find_matching_node<F>(keys: &Vec<TokenKey>, matcher: F) -> Option<TokenKey>
-where
-    F: Fn(&TokenKey) -> Option<TokenKey>,
-{
-    keys.iter().filter_map(matcher).next()
 }
 
 #[cfg(test)]

@@ -60,7 +60,8 @@ fn differentiate_subtree(
                 let exponent = tree.clone_node_of(right_child)?;
                 let multiply_node = tree.add_node_children("*".parse().unwrap(), exponent, node)?;
 
-                mutate_literal(tree, right_child, |exponent| *exponent -= 1f64)?;
+                let subtraction = create_subtract_one(tree, right_child)?;
+                tree.replace_child_of(node, right_child, subtraction)?;
 
                 Ok(multiply_node)
             } else if operator.symbol == "*" {
@@ -89,16 +90,11 @@ fn differentiate_subtree(
     }
 }
 
-fn mutate_literal<F>(tree: &mut ExpressionTree<Valid>, key: TokenKey, mut mutate: F) -> Result<()>
-where
-    F: FnMut(&mut f64),
-{
-    let token = tree.mut_token_of(key)?;
-    if let Token::Literal(literal) = token {
-        mutate(literal);
-        return Ok(());
-    }
-    Err(anyhow!("Token is not a literal"))
+/// Returns node 'from' with a subtraction node: from - 1
+fn create_subtract_one(tree: &mut ExpressionTree<Valid>, from: TokenKey) -> Result<TokenKey> {
+    let one = tree.add_node(Token::Literal(1f64));
+    let subtraction = tree.add_node_children("-".parse().unwrap(), from, one)?;
+    Ok(subtraction)
 }
 
 #[cfg(test)]
@@ -115,11 +111,13 @@ mod tests {
 
         let actual_tree = find_derivative(tree, &variable).unwrap();
 
-        // 2 * x (but in postfix notation)
+        // 2 * x^(2 - 1) (but in postfix notation)
         let expected_tokens = vec![
             Token::Literal(2f64),
             variable.clone(),
+            Token::Literal(2f64),
             Token::Literal(1f64),
+            "-".parse().unwrap(),
             "^".parse().unwrap(),
             "*".parse().unwrap(),
         ];
@@ -130,12 +128,12 @@ mod tests {
 
     #[test]
     fn complex_exponent_term_is_differentiated_correctly() {
-        // 3 * x^4 (but in postfix notation)
+        // 3 * x^y (but in postfix notation)
         let variable = Token::Identifier("x".to_string());
         let tokens = vec![
             Token::Literal(3f64),
             variable.clone(),
-            Token::Literal(4f64),
+            Token::Identifier("y".to_string()),
             "^".parse().unwrap(),
             "*".parse().unwrap(),
         ];
@@ -143,12 +141,14 @@ mod tests {
 
         let actual_tree = find_derivative(tree, &variable).unwrap();
 
-        // 3 * (4 * x^3) (but in postfix notation)
+        // 3 * (y * x^(y-1)) (but in postfix notation)
         let expected_tokens = vec![
             Token::Literal(3f64),
-            Token::Literal(4f64),
+            Token::Identifier("y".to_string()),
             variable.clone(),
-            Token::Literal(3f64),
+            Token::Identifier("y".to_string()),
+            Token::Literal(1f64),
+            "-".parse().unwrap(),
             "^".parse().unwrap(),
             "*".parse().unwrap(),
             "*".parse().unwrap(),
@@ -173,11 +173,13 @@ mod tests {
 
         let actual_tree = find_derivative(tree, &variable).unwrap();
 
-        // (4 * x^3) * 3 (but in postfix notation)
+        // (4 * x^(4-1)) * 3 (but in postfix notation)
         let expected_tokens = vec![
             Token::Literal(4f64),
             variable.clone(),
-            Token::Literal(3f64),
+            Token::Literal(4f64),
+            Token::Literal(1f64),
+            "-".parse().unwrap(),
             "^".parse().unwrap(),
             "*".parse().unwrap(),
             Token::Literal(3f64),

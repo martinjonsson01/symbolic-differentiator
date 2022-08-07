@@ -20,12 +20,25 @@ impl Token {
     /// A 'value' is a token that either represents, contains or is a numerical value.
     /// E.g. a literal or identifier.
     pub fn is_value(&self) -> bool {
-        matches!(self, Token::Literal(_)) || matches!(self, Token::Identifier(_))
+        self.is_literal() || self.is_identifier()
     }
     
+    pub fn is_identifier(&self) -> bool {
+        matches!(self, Token::Identifier(_))
+    }
+    
+    pub fn is_literal(&self) -> bool {
+        matches!(self, Token::Literal(_))
+    }
+
     pub fn is_caret(&self) -> bool {
-        let caret = "^".to_string();
-        matches!(self, Token::Operator(Operator { symbol: caret, .. }))
+        let _caret = "^".to_string();
+        matches!(self, Token::Operator(Operator { symbol: _caret, .. }))
+    }
+    
+    pub fn is_multiplication(&self) -> bool {
+        let _star = "*".to_string();
+        matches!(self, Token::Operator(Operator { symbol: _star, .. }))
     }
 }
 

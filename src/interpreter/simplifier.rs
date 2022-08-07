@@ -74,16 +74,14 @@ fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: TokenKey) -> Res
             } else if operator.symbol == "*" {
                 let zero_node = find_matching_node(tree, &children, |token| *token == zero);
                 let one_node = find_matching_node(tree, &children, |token| *token == one);
-                let value_node =
-                    find_matching_node(tree, &children, |token| token.is_value() && *token != one);
+                let other_node =
+                    find_matching_node(tree, &children, |token|  *token != one);
                 // x * 1 || 1 * x -> x
-                if one_node.is_some() && value_node.is_some() {
-                    let value_token = tree.token_of(value_node.unwrap())?;
-                    let new_root = tree.add_node(value_token.clone());
-                    return Ok(new_root);
+                if one_node.is_some() && other_node.is_some() {
+                    return Ok(other_node.unwrap());
                 }
                 // x * 0 || 0 * x -> x
-                else if zero_node.is_some() && value_node.is_some() {
+                else if zero_node.is_some() && other_node.is_some() {
                     let new_root = tree.add_node(zero);
                     return Ok(new_root);
                 }
@@ -181,8 +179,8 @@ mod tests {
     }
 
     #[test]
-    fn simplify_identity_operation_returns_original() {
-        simplify_expression_returns_expected("0 + x * y", "x * y")
+    fn simplify_expression_returns_expected_example() {
+        simplify_expression_returns_expected("1 * (x + y)", "x + y")
     }
 
     #[parameterized(
@@ -269,6 +267,7 @@ mod tests {
     "(x * y) - 0",
     "(x * y) + 0",
     "0 + (x * y)",
+    "1 * (x + y)",
     },
     expected_simplification = {
     "(x + y) * z",
@@ -277,6 +276,7 @@ mod tests {
     "x * y",
     "x * y",
     "x * y",
+    "x + y",
     }
     )]
     fn simplify_nested_expressions_returns_expected(

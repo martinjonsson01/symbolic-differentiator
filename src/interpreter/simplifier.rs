@@ -1,6 +1,8 @@
 use crate::interpreter::find_matching_node;
 use crate::interpreter::operator::Operator;
-use crate::interpreter::parser::expression_tree::{ExpressionTree, Node, NodeKey, Valid};
+use crate::interpreter::parser::expression_tree::{
+    CompositeData, ExpressionTree, Node, NodeKey, Valid,
+};
 use crate::Token;
 use anyhow::{bail, Context, Error, Result};
 
@@ -35,39 +37,47 @@ fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Resu
         Some(Node::LiteralInteger(_) | Node::Identifier(_)) => {
             return Ok(node);
         }
-        Some(Node::Summation { add, subtract,
-        }) => {
-            let add = add.clone();
-            let subtract = subtract.clone();
-            
-            let mut new_add = vec![];
-            for key in add {
-                let simplified = simplify_subtree(tree, key)?;
-                let nonzero = is_nonzero(tree, &simplified);
-                new_add.push(nonzero);
-            }
-            let mut new_subtract = vec![];
-            for key in subtract {
-                let simplified = simplify_subtree(tree, key)?;
-                let nonzero = is_nonzero(tree, &simplified);
-                new_subtract.push(nonzero);
-            }
+        Some(Node::Composite(data)) => {
+            let data = data.clone();
+            let mut new_left = vec![];
+            let mut new_right = vec![];
 
-            let new_node = tree.add_node(Node::Summation {
-                add: new_add.iter().filter_map(|key| *key).collect(),
-                subtract: new_subtract.iter().filter_map(|key| *key).collect(),
-            });
-            Ok(new_node)
-        }
-        Some(Node::Multiplication { multiply, divide }) => {
-            let multiply_without_one = multiply
-                .iter()
-                .filter_map(|key| is_not_one(tree, key))
-                .collect();
-            let new_node = tree.add_node(Node::Multiplication {
-                multiply: multiply_without_one,
-                divide: divide.clone(),
-            });
+            let mut left_leftovers =
+                simplify_composite_children(tree, &data.left, &mut new_left, &mut new_right)?;
+            let mut right_leftovers =
+                simplify_composite_children(tree, &data.right, &mut new_left, &mut new_right)?;
+            new_left.append(&mut left_leftovers);
+            new_right.append(&mut right_leftovers);
+
+            let (filtered_left, filtered_right) = if data.is_summation() {
+                let nonzero_adds = new_left
+                    .iter()
+                    .filter_map(|key| to_nonzero(tree, key))
+                    .collect();
+                let nonzero_subtracts = new_right
+                    .iter()
+                    .filter_map(|key| to_nonzero(tree, key))
+                    .collect();
+                (nonzero_adds, nonzero_subtracts)
+            } else if data.is_fraction() {
+                let adds_without_ones = new_left
+                    .iter()
+                    .filter_map(|key| to_not_one(tree, key))
+                    .collect();
+                let subtracts_without_ones = new_right
+                    .iter()
+                    .filter_map(|key| to_not_one(tree, key))
+                    .collect();
+                (adds_without_ones, subtracts_without_ones)
+            } else {
+                (new_left, new_right)
+            };
+
+            let new_node = tree.add_node(Node::Composite(CompositeData {
+                left: filtered_left,
+                right: filtered_right,
+                ..data
+            }));
             Ok(new_node)
         }
         Some(Node::BinaryOperation {
@@ -116,6 +126,36 @@ fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Resu
     }
 }
 
+fn simplify_composite_children(
+    tree: &mut ExpressionTree<Valid>,
+    children: &Vec<NodeKey>,
+    new_left: &mut Vec<NodeKey>,
+    new_right: &mut Vec<NodeKey>,
+) -> Result<Vec<NodeKey>> {
+    let mut leftovers = vec![];
+    for key in children {
+        let simplified = simplify_subtree(tree, *key)?;
+        let node = tree
+            .get_node(simplified)
+            .context("Expected node to exist in tree")?;
+
+        match node {
+            // Flatten any direct child composite nodes into this one.
+            Node::Composite(CompositeData {
+                operator: Operator::Add,
+                left,
+                right,
+                ..
+            }) => {
+                new_left.append(&mut left.clone());
+                new_right.append(&mut right.clone());
+            }
+            _ => leftovers.push(*key),
+        }
+    }
+    Ok(leftovers)
+}
+
 fn try_evaluate_as_literals(
     tree: &mut ExpressionTree<Valid>,
     node: NodeKey,
@@ -142,11 +182,11 @@ fn try_evaluate_as_literals(
     }
 }
 
-fn is_nonzero(tree: &ExpressionTree<Valid>, key: &NodeKey) -> Option<NodeKey> {
+fn to_nonzero(tree: &ExpressionTree<Valid>, key: &NodeKey) -> Option<NodeKey> {
     node_matches(tree, key, |node| !node.is_zero())
 }
 
-fn is_not_one(tree: &ExpressionTree<Valid>, key: &NodeKey) -> Option<NodeKey> {
+fn to_not_one(tree: &ExpressionTree<Valid>, key: &NodeKey) -> Option<NodeKey> {
     node_matches(tree, key, |node| !node.is_one())
 }
 
@@ -186,7 +226,7 @@ mod tests {
 
     #[test]
     fn simplify_expression_returns_expected_example() {
-        simplify_expression_returns_expected("1 * (x + y)", "x + y")
+        simplify_expression_returns_expected("x + 0", "x")
     }
 
     #[parameterized(
@@ -217,6 +257,7 @@ mod tests {
     "x + 0",
     "0 + x",
     "x - 0",
+    "0 + 0 + 0 + x",
     "1 * 1 * 1 * x",
     }
     )]

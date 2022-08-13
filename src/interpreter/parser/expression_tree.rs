@@ -21,20 +21,51 @@ pub struct ExpressionTree<S: Debug> {
     state: S,
 }
 
+pub struct Summation {}
+
+pub struct Multiplication {}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompositeData {
+    pub(crate) operator: Operator,
+    pub(crate) inverse_operator: Operator,
+    pub(crate) left: Vec<NodeKey>,
+    pub(crate) right: Vec<NodeKey>,
+}
+
+impl CompositeData {
+    pub fn is_summation(&self) -> bool {
+        self.operator == Operator::Add && self.inverse_operator == Operator::Subtract
+    }
+    
+    pub fn is_fraction(&self) -> bool {
+        self.operator == Operator::Multiply && self.inverse_operator == Operator::Divide
+    }
+
+    fn node_name(&self) -> String {
+        match self.operator {
+            Operator::Add => "Summation".into(),
+            Operator::Multiply => "Fraction".into(),
+            _ => "Unknown".into(),
+        }
+    }
+    
+    fn left_node_name(&self) -> String {
+        self.operator.to_string()
+    }
+    
+    fn right_node_name(&self) -> String {
+        self.inverse_operator.to_string()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
     // Terminal symbols (leaves)
     LiteralInteger(i32),
     Identifier(String),
     // Non-terminal symbols (non-leaves)
-    Summation {
-        add: Vec<NodeKey>,
-        subtract: Vec<NodeKey>,
-    },
-    Multiplication {
-        multiply: Vec<NodeKey>,
-        divide: Vec<NodeKey>,
-    },
+    Composite(CompositeData),
     BinaryOperation {
         operator: Operator,
         left_operand: NodeKey,
@@ -52,31 +83,19 @@ impl Node {
     }
 
     pub fn new_binary_addition(left_operand: NodeKey, right_operand: NodeKey) -> Node {
-        Node::Summation {
-            add: vec![left_operand, right_operand],
-            subtract: Vec::new(),
-        }
+        Self::new_composite_summation(vec![left_operand, right_operand], Vec::new())
     }
 
     pub fn new_binary_subtraction(left_operand: NodeKey, right_operand: NodeKey) -> Node {
-        Node::Summation {
-            add: vec![left_operand],
-            subtract: vec![right_operand],
-        }
+        Self::new_composite_summation(vec![left_operand], vec![right_operand])
     }
 
     pub fn new_binary_multiplication(left_operand: NodeKey, right_operand: NodeKey) -> Node {
-        Node::Multiplication {
-            multiply: vec![left_operand, right_operand],
-            divide: Vec::new(),
-        }
+        Self::new_composite_fraction(vec![left_operand, right_operand], Vec::new())
     }
 
     pub fn new_binary_division(left_operand: NodeKey, right_operand: NodeKey) -> Node {
-        Node::Multiplication {
-            multiply: vec![left_operand],
-            divide: vec![right_operand],
-        }
+        Self::new_composite_fraction(vec![left_operand], vec![right_operand])
     }
 
     pub fn new_binary_exponentiation(left_operand: NodeKey, right_operand: NodeKey) -> Node {
@@ -85,6 +104,24 @@ impl Node {
             left_operand,
             right_operand,
         }
+    }
+
+    pub fn new_composite_summation(left: Vec<NodeKey>, right: Vec<NodeKey>) -> Node {
+        Node::Composite(CompositeData {
+            operator: Operator::Add,
+            inverse_operator: Operator::Subtract,
+            left,
+            right,
+        })
+    }
+
+    pub fn new_composite_fraction(left: Vec<NodeKey>, right: Vec<NodeKey>) -> Node {
+        Node::Composite(CompositeData {
+            operator: Operator::Multiply,
+            inverse_operator: Operator::Divide,
+            left,
+            right,
+        })
     }
 
     pub fn is_operator(&self, _check_operator: Operator) -> bool {
@@ -126,8 +163,7 @@ impl Node {
     pub fn get_operator(&self) -> Option<Operator> {
         match self {
             Node::LiteralInteger(_) | Node::Identifier(_) => None,
-            Node::Summation { .. } => Some(Operator::Add),
-            Node::Multiplication { .. } => Some(Operator::Multiply),
+            Node::Composite(CompositeData { operator, .. }) => Some(*operator),
             Node::BinaryOperation { operator, .. } => Some(*operator),
         }
     }
@@ -138,14 +174,7 @@ impl Node {
     {
         match self {
             Node::LiteralInteger(_) | Node::Identifier(_) => {}
-            Node::Summation {
-                add: left,
-                subtract: right,
-            }
-            | Node::Multiplication {
-                multiply: left,
-                divide: right,
-            } => {
+            Node::Composite(CompositeData { left, right, .. }) => {
                 left.iter().for_each(&action);
                 right.iter().for_each(action);
             }
@@ -188,24 +217,16 @@ fn node_eq(
         (Node::LiteralInteger(value1), Node::LiteralInteger(value2)) => value1 == value2,
         (Node::Identifier(name1), Node::Identifier(name2)) => name1 == name2,
         (
-            Node::Multiplication {
-                multiply: first1,
-                divide: second1,
-            },
-            Node::Multiplication {
-                multiply: first2,
-                divide: second2,
-            },
-        )
-        | (
-            Node::Summation {
-                add: first1,
-                subtract: second1,
-            },
-            Node::Summation {
-                add: first2,
-                subtract: second2,
-            },
+            Node::Composite(CompositeData {
+                left: first1,
+                right: second1,
+                ..
+            }),
+            Node::Composite(CompositeData {
+                left: first2,
+                right: second2,
+                ..
+            }),
         ) => {
             if first1.len() != first2.len() {
                 return false;
@@ -360,14 +381,11 @@ impl ExpressionTree<Valid> {
             Node::LiteralInteger(_) | Node::Identifier(_) => {
                 Err(anyhow!("Value nodes do not have children"))
             }
-            Node::Summation {
-                add: ref mut left,
-                subtract: ref mut right,
-            }
-            | Node::Multiplication {
-                multiply: ref mut left,
-                divide: ref mut right,
-            } => {
+            Node::Composite(CompositeData {
+                ref mut left,
+                ref mut right,
+                ..
+            }) => {
                 let child_ref = left
                     .iter_mut()
                     .chain(right.iter_mut())
@@ -406,7 +424,12 @@ impl ExpressionTree<Valid> {
         match node {
             Node::LiteralInteger(value) => Ok(vec![Token::LiteralInteger(*value)]),
             Node::Identifier(name) => Ok(vec![Token::Identifier(name.to_string())]),
-            Node::Summation { add, subtract } => {
+            Node::Composite(CompositeData {
+                operator: Operator::Add,
+                left: add,
+                right: subtract,
+                ..
+            }) => {
                 let mut tokens = Vec::new();
                 let mut add_tokens = self.build_group_tokens(Some(node), add.iter(), Token::Plus);
                 let mut subtract_tokens =
@@ -427,7 +450,12 @@ impl ExpressionTree<Valid> {
 
                 Ok(tokens)
             }
-            Node::Multiplication { multiply, divide } => {
+            Node::Composite(CompositeData {
+                operator: Operator::Multiply,
+                left: multiply,
+                right: divide,
+                ..
+            }) => {
                 let mut tokens = Vec::new();
                 let mut multiply_tokens =
                     self.build_group_tokens(Some(node), multiply.iter(), Token::Asterisk);
@@ -441,6 +469,9 @@ impl ExpressionTree<Valid> {
                     tokens.push(Token::RightParentheses);
                 }
                 Ok(tokens)
+            }
+            Node::Composite(_) => {
+                return Err(anyhow!("This composite node has not been implemented yet"))
             }
             Node::BinaryOperation {
                 operator,
@@ -539,36 +570,18 @@ impl ExpressionTree<Valid> {
                 Node::Identifier(name) => {
                     builder.add_empty_child(format!("{}", name));
                 }
-                Node::Summation { add, subtract } => {
-                    builder.begin_child("GroupSumSub".into());
-                    if add.len() > 0 {
-                        builder.begin_child("Sum".into());
-                        for key in add {
+                Node::Composite (data) => {
+                    builder.begin_child(data.node_name());
+                    if data.left.len() > 0 {
+                        builder.begin_child(data.left_node_name().into());
+                        for key in &data.left {
                             self.write_node(*key, builder)
                         }
                         builder.end_child();
                     }
-                    if subtract.len() > 0 {
-                        builder.begin_child("Sub".into());
-                        for key in subtract {
-                            self.write_node(*key, builder)
-                        }
-                        builder.end_child();
-                    }
-                    builder.end_child();
-                }
-                Node::Multiplication { multiply, divide } => {
-                    builder.begin_child("GroupMulDiv".into());
-                    if multiply.len() > 0 {
-                        builder.begin_child("Mul".into());
-                        for key in multiply {
-                            self.write_node(*key, builder)
-                        }
-                        builder.end_child();
-                    }
-                    if divide.len() > 0 {
-                        builder.begin_child("Div".into());
-                        for key in divide {
+                    if data.right.len() > 0 {
+                        builder.begin_child(data.right_node_name().into());
+                        for key in &data.right {
                             self.write_node(*key, builder)
                         }
                         builder.end_child();

@@ -53,6 +53,16 @@ impl Operator {
             Operator::Exponentiate => a.pow(b as u32),
         }
     }
+    
+    pub fn identity_operand(&self) -> i32 {
+        match self {
+            Operator::Add |
+            Operator::Subtract => 0,
+            Operator::Multiply |
+            Operator::Divide => 1,
+            Operator::Exponentiate => 1,
+        }
+    }
 }
 
 #[derive(Clone, PartialEq)]

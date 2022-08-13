@@ -21,10 +21,6 @@ pub struct ExpressionTree<S: Debug> {
     state: S,
 }
 
-pub struct Summation {}
-
-pub struct Multiplication {}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompositeData {
     pub(crate) operator: Operator,

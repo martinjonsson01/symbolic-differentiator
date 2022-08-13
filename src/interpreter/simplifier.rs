@@ -1,22 +1,23 @@
-use crate::interpreter::parser::expression_tree::{ExpressionTree, TokenKey, Valid};
+use crate::interpreter::find_matching_node;
+use crate::interpreter::operator::Operator;
+use crate::interpreter::parser::expression_tree::{ExpressionTree, Node, NodeKey, Valid};
 use crate::Token;
 use anyhow::{bail, Context, Error, Result};
-use crate::interpreter::find_matching_node;
 
-/// Simplifies a given expression tree. 
-/// 
+/// Simplifies a given expression tree.
+///
 /// **NOTE:**
 /// This does not guarantee a complete mathematical simplification, as not all possible
 /// types of simplifiable patterns are implemented.
-/// 
-/// # Arguments 
-/// 
+///
+/// # Arguments
+///
 /// * `tree`: A valid expression tree.
-/// 
-/// returns: A simplified (or the input) expression tree. 
-/// 
-/// # Examples 
-/// 
+///
+/// returns: A simplified (or the input) expression tree.
+///
+/// # Examples
+///
 /// ```
 /// let expression_tree = convert(expression.to_string())?;
 ///
@@ -29,106 +30,106 @@ pub fn simplify(mut tree: ExpressionTree<Valid>) -> Result<ExpressionTree<Valid>
     Ok(simplification)
 }
 
-fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: TokenKey) -> Result<TokenKey> {
-    if tree.is_leaf(node) {
-        return Ok(node);
-    }
+fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Result<NodeKey> {
+    match tree.get_node(node) {
+        Some(Node::LiteralInteger(_) | Node::Identifier(_)) => {
+            return Ok(node);
+        }
+        Some(Node::Summation { add, subtract,
+        }) => {
+            let add = add.clone();
+            let subtract = subtract.clone();
+            
+            let mut new_add = vec![];
+            for key in add {
+                let simplified = simplify_subtree(tree, key)?;
+                let nonzero = is_nonzero(tree, &simplified);
+                new_add.push(nonzero);
+            }
+            let mut new_subtract = vec![];
+            for key in subtract {
+                let simplified = simplify_subtree(tree, key)?;
+                let nonzero = is_nonzero(tree, &simplified);
+                new_subtract.push(nonzero);
+            }
 
-    // Simplify both subtrees before trying to simplify current node.
-    let left_simplified = {
-        let left_child = tree
-            .left_child_of(node)
-            .context("Expected a left operand")?;
-        simplify_subtree(tree, left_child)?
-    };
-    let right_simplified = {
-        let right_child = tree
-            .right_child_of(node)
-            .context("Expected a right operand")?;
-        simplify_subtree(tree, right_child)?
-    };
-    tree.set_children_of(node, left_simplified, right_simplified)?;
+            let new_node = tree.add_node(Node::Summation {
+                add: new_add.iter().filter_map(|key| *key).collect(),
+                subtract: new_subtract.iter().filter_map(|key| *key).collect(),
+            });
+            Ok(new_node)
+        }
+        Some(Node::Multiplication { multiply, divide }) => {
+            let multiply_without_one = multiply
+                .iter()
+                .filter_map(|key| is_not_one(tree, key))
+                .collect();
+            let new_node = tree.add_node(Node::Multiplication {
+                multiply: multiply_without_one,
+                divide: divide.clone(),
+            });
+            Ok(new_node)
+        }
+        Some(Node::BinaryOperation {
+            operator,
+            left_operand,
+            right_operand,
+        }) => {
+            let operator = operator.clone();
+            let left_key = left_operand.clone();
+            let right_key = right_operand.clone();
+            let left_simplified = simplify_subtree(tree, left_key)?;
+            let right_simplified = simplify_subtree(tree, right_key)?;
 
-    match tree.token_of(node) {
-        Ok(Token::Operator(operator)) => {
-            let left_token = tree.token_of(left_simplified)?;
-            let right_token = tree.token_of(right_simplified)?;
-            let children = vec![left_simplified, right_simplified];
+            let left_node = tree
+                .get_node(left_simplified)
+                .context("Expected a left operand")?;
+            let right_node = tree
+                .get_node(right_simplified)
+                .context("Expected a right operand")?;
 
-            let evaluate = operator.evaluate;
-            let left_token = left_token.clone();
-            let right_token = right_token.clone();
-
-            let zero = Token::Literal(0f64);
-            let one = Token::Literal(1f64);
-            if operator.symbol == "^" {
+            if operator == Operator::Exponentiate {
                 // x^0 -> 1
-                if right_token == zero && left_token != zero {
-                    let new_root = tree.add_node(one);
-                    return Ok(new_root);
+                if right_node.is_literal_integer(0) && !left_node.is_literal_integer(0) {
+                    let one = tree.add_node(Node::new_literal_integer(1));
+                    return Ok(one);
                 }
                 // x^1 -> x
-                else if right_token == one && left_token != zero && left_token.is_value() {
-                    let base = tree.add_node(left_token.clone());
+                else if right_node.is_literal_integer(1)
+                    && !left_node.is_literal_integer(0)
+                    && left_node.is_value()
+                {
+                    let base = tree.add_node(left_node.clone());
                     return Ok(base);
-                }
-            } else if operator.symbol == "*" {
-                let zero_node = find_matching_node(tree, &children, |token| *token == zero);
-                let one_node = find_matching_node(tree, &children, |token| *token == one);
-                let other_node =
-                    find_matching_node(tree, &children, |token|  *token != one);
-                // x * 1 || 1 * x -> x
-                if one_node.is_some() && other_node.is_some() {
-                    return Ok(other_node.unwrap());
-                }
-                // x * 0 || 0 * x -> x
-                else if zero_node.is_some() && other_node.is_some() {
-                    let new_root = tree.add_node(zero);
-                    return Ok(new_root);
-                }
-            } else if operator.symbol == "/" {
-                // 0 / x -> 0
-                if left_token == zero && right_token.is_value() && right_token != zero {
-                    let new_root = tree.add_node(zero);
-                    return Ok(new_root);
-                }
-            } else if operator.symbol == "+" {
-                let zero_node = find_matching_node(tree, &children, |token| *token == zero);
-                let value_node = find_matching_node(tree, &children, |token| *token != zero);
-                // x + 0 || 0 + x -> x
-                if zero_node.is_some() && value_node.is_some() {
-                    return Ok(value_node.unwrap());
-                }
-            } else if operator.symbol == "-" {
-                // x - 0 -> x
-                if right_token == zero {
-                    return Ok(left_simplified);
                 }
             }
 
-            return try_evaluate_as_literals(&mut tree, node, evaluate, left_token, right_token);
+            return try_evaluate_as_literals(
+                &mut tree,
+                node,
+                &operator,
+                left_simplified,
+                right_simplified,
+            );
         }
-        _ => bail!("The given node is not an operator token in the given expression tree"),
+        None => bail!("The given node does not exist in the given expression tree"),
     }
 }
 
-fn try_evaluate_as_literals<F>(
+fn try_evaluate_as_literals(
     tree: &mut ExpressionTree<Valid>,
-    node: TokenKey,
-    evaluate: F,
-    left_token: Token,
-    right_token: Token,
-) -> Result<TokenKey, Error>
-where
-    F: Fn(f64, f64) -> f64,
-{
-    match left_token {
-        Token::Literal(left_value) => {
-            match right_token {
-                Token::Literal(right_value) => {
+    node: NodeKey,
+    operator: &Operator,
+    left: NodeKey,
+    right: NodeKey,
+) -> Result<NodeKey, Error> {
+    match tree.get_node(left) {
+        Some(Node::LiteralInteger(left_value)) => {
+            match tree.get_node(right) {
+                Some(Node::LiteralInteger(right_value)) => {
                     // literal op literal -> evaluate
-                    let evaluation = evaluate(left_value, right_value);
-                    let literal = Token::Literal(evaluation);
+                    let evaluation = operator.evaluate(*left_value, *right_value);
+                    let literal = Node::LiteralInteger(evaluation);
                     let evaluated_node = tree.add_node(literal);
                     Ok(evaluated_node)
                 }
@@ -139,6 +140,27 @@ where
         // x op y -> x op y
         _ => Ok(node),
     }
+}
+
+fn is_nonzero(tree: &ExpressionTree<Valid>, key: &NodeKey) -> Option<NodeKey> {
+    node_matches(tree, key, |node| !node.is_zero())
+}
+
+fn is_not_one(tree: &ExpressionTree<Valid>, key: &NodeKey) -> Option<NodeKey> {
+    node_matches(tree, key, |node| !node.is_one())
+}
+
+fn node_matches(
+    tree: &ExpressionTree<Valid>,
+    key: &NodeKey,
+    predicate: impl Fn(&Node) -> bool,
+) -> Option<NodeKey> {
+    if let Some(node) = tree.get_node(*key) {
+        if predicate(node) {
+            return Some(*key);
+        }
+    }
+    None
 }
 
 #[cfg(test)]

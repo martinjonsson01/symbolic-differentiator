@@ -1,3 +1,4 @@
+use crate::interpreter::operator::Operator;
 use crate::interpreter::token::Token;
 use anyhow::{anyhow, bail, Context, Result};
 use ptree::{write_tree, TreeBuilder};
@@ -5,40 +6,175 @@ use slotmap::{new_key_type, SlotMap};
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 
-new_key_type! { pub struct TokenKey; }
+new_key_type! { pub struct NodeKey; }
 
 #[derive(Debug)]
 struct Empty {}
 
 #[derive(Debug)]
 pub struct Valid {
-    root_key: TokenKey,
+    root_key: NodeKey,
 }
 
 pub struct ExpressionTree<S: Debug> {
-    nodes: SlotMap<TokenKey, TokenNode>,
+    nodes: SlotMap<NodeKey, Node>,
     state: S,
 }
 
-#[derive(Debug, Clone)]
-struct TokenNode {
-    token: Token,
-    left: Option<TokenKey>,
-    right: Option<TokenKey>,
+#[derive(Debug, Clone, PartialEq)]
+pub enum Node {
+    // Terminal symbols (leaves)
+    LiteralInteger(i32),
+    Identifier(String),
+    // Non-terminal symbols (non-leaves)
+    Summation {
+        add: Vec<NodeKey>,
+        subtract: Vec<NodeKey>,
+    },
+    Multiplication {
+        multiply: Vec<NodeKey>,
+        divide: Vec<NodeKey>,
+    },
+    BinaryOperation {
+        operator: Operator,
+        left_operand: NodeKey,
+        right_operand: NodeKey,
+    },
+}
+
+impl Node {
+    pub fn new_literal_integer(value: i32) -> Node {
+        Node::LiteralInteger(value)
+    }
+
+    pub fn new_identifier(name: String) -> Node {
+        Node::Identifier(name)
+    }
+
+    pub fn new_binary_addition(left_operand: NodeKey, right_operand: NodeKey) -> Node {
+        Node::Summation {
+            add: vec![left_operand, right_operand],
+            subtract: Vec::new(),
+        }
+    }
+
+    pub fn new_binary_subtraction(left_operand: NodeKey, right_operand: NodeKey) -> Node {
+        Node::Summation {
+            add: vec![left_operand],
+            subtract: vec![right_operand],
+        }
+    }
+
+    pub fn new_binary_multiplication(left_operand: NodeKey, right_operand: NodeKey) -> Node {
+        Node::Multiplication {
+            multiply: vec![left_operand, right_operand],
+            divide: Vec::new(),
+        }
+    }
+
+    pub fn new_binary_division(left_operand: NodeKey, right_operand: NodeKey) -> Node {
+        Node::Multiplication {
+            multiply: vec![left_operand],
+            divide: vec![right_operand],
+        }
+    }
+
+    pub fn new_binary_exponentiation(left_operand: NodeKey, right_operand: NodeKey) -> Node {
+        Node::BinaryOperation {
+            operator: Operator::Exponentiate,
+            left_operand,
+            right_operand,
+        }
+    }
+
+    pub fn is_operator(&self, _check_operator: Operator) -> bool {
+        matches!(
+            self,
+            Node::BinaryOperation {
+                operator: _check_operator,
+                ..
+            }
+        )
+    }
+
+    pub fn is_value(&self) -> bool {
+        matches!(self, Node::Identifier(_) | Node::LiteralInteger(_))
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.is_literal_integer(0)
+    }
+
+    pub fn is_one(&self) -> bool {
+        self.is_literal_integer(1)
+    }
+
+    pub fn is_literal_integer(&self, compare_to: i32) -> bool {
+        match self {
+            Node::LiteralInteger(value) => *value == compare_to,
+            _ => false,
+        }
+    }
+
+    pub fn is_identifier(&self, compare_to: &str) -> bool {
+        match self {
+            Node::Identifier(name) => *name == compare_to,
+            _ => false,
+        }
+    }
+
+    pub fn get_operator(&self) -> Option<Operator> {
+        match self {
+            Node::LiteralInteger(_) | Node::Identifier(_) => None,
+            Node::Summation { .. } => Some(Operator::Add),
+            Node::Multiplication { .. } => Some(Operator::Multiply),
+            Node::BinaryOperation { operator, .. } => Some(*operator),
+        }
+    }
+
+    pub fn map_children<Func>(&self, action: Func)
+    where
+        Func: Fn(&NodeKey),
+    {
+        match self {
+            Node::LiteralInteger(_) | Node::Identifier(_) => {}
+            Node::Summation {
+                add: left,
+                subtract: right,
+            }
+            | Node::Multiplication {
+                multiply: left,
+                divide: right,
+            } => {
+                left.iter().for_each(&action);
+                right.iter().for_each(action);
+            }
+            Node::BinaryOperation {
+                left_operand,
+                right_operand,
+                ..
+            } => {
+                action(left_operand);
+                action(right_operand);
+            }
+        }
+    }
 }
 
 impl PartialEq for ExpressionTree<Valid> {
     fn eq(&self, other: &Self) -> bool {
-        node_eq(self, other, Some(self.root_key()), Some(other.root_key()))
+        node_eq(self, other, self.root_key(), other.root_key())
     }
 }
 
 fn node_eq(
     tree1: &ExpressionTree<Valid>,
     tree2: &ExpressionTree<Valid>,
-    maybe_node1: Option<TokenKey>,
-    maybe_node2: Option<TokenKey>,
+    key1: NodeKey,
+    key2: NodeKey,
 ) -> bool {
+    let maybe_node1 = tree1.get_node(key1);
+    let maybe_node2 = tree2.get_node(key2);
     if maybe_node1.is_none() && maybe_node2.is_none() {
         return true;
     }
@@ -47,20 +183,72 @@ fn node_eq(
     }
     let node1 = maybe_node1.expect("Value should logically exist by now");
     let node2 = maybe_node2.expect("Value should logically exist by now");
-    if let Ok(token1) = tree1.token_of(node1) {
-        if let Ok(token2) = tree2.token_of(node2) {
-            if token1 != token2 {
+
+    return match (node1, node2) {
+        (Node::LiteralInteger(value1), Node::LiteralInteger(value2)) => value1 == value2,
+        (Node::Identifier(name1), Node::Identifier(name2)) => name1 == name2,
+        (
+            Node::Multiplication {
+                multiply: first1,
+                divide: second1,
+            },
+            Node::Multiplication {
+                multiply: first2,
+                divide: second2,
+            },
+        )
+        | (
+            Node::Summation {
+                add: first1,
+                subtract: second1,
+            },
+            Node::Summation {
+                add: first2,
+                subtract: second2,
+            },
+        ) => {
+            if first1.len() != first2.len() {
                 return false;
             }
+            if second1.len() != second2.len() {
+                return false;
+            }
+            return nodes_eq(tree1, tree2, first1.iter(), first2.iter())
+                && nodes_eq(tree1, tree2, second1.iter(), second2.iter());
         }
-    }
+        (
+            Node::BinaryOperation {
+                operator: operator1,
+                left_operand: left_operand1,
+                right_operand: right_operand1,
+            },
+            Node::BinaryOperation {
+                operator: operator2,
+                left_operand: left_operand2,
+                right_operand: right_operand2,
+            },
+        ) => {
+            if operator1 != operator2 {
+                return false;
+            }
 
-    let node1_left = tree1.left_child_of(node1);
-    let node1_right = tree1.right_child_of(node1);
-    let node2_left = tree2.left_child_of(node2);
-    let node2_right = tree2.right_child_of(node2);
+            node_eq(tree1, tree2, *left_operand1, *left_operand2)
+                && node_eq(tree1, tree2, *right_operand1, *right_operand2)
+        }
+        _ => false, // node1 and node2 are different variants
+    };
+}
 
-    node_eq(tree1, tree2, node1_left, node2_left) && node_eq(tree1, tree2, node1_right, node2_right)
+fn nodes_eq<'a>(
+    tree1: &ExpressionTree<Valid>,
+    tree2: &ExpressionTree<Valid>,
+    keys1: impl Iterator<Item = &'a NodeKey>,
+    keys2: impl Iterator<Item = &'a NodeKey>,
+) -> bool {
+    keys1
+        .zip(keys2)
+        .map(|(key1, key2)| node_eq(tree1, tree2, *key1, *key2))
+        .all(|equal| equal)
 }
 
 impl<S: Debug> ExpressionTree<S> {
@@ -83,24 +271,32 @@ impl<S: Debug> ExpressionTree<S> {
 
         let mut tokens = postfix_tokens.clone();
         tokens.reverse();
-        let mut operand_keys: Vec<TokenKey> = Vec::new();
+        let mut operand_keys: Vec<NodeKey> = Vec::new();
 
         while let Some(token) = tokens.pop() {
             match token {
-                Token::Operator(_) => {
-                    let second_operand_key =
-                        operand_keys.pop().context("Expected a second operand")?;
-                    let first_operand_key =
-                        operand_keys.pop().context("Expected a first operand")?;
-
-                    let operator_key =
-                        tree.add_node_children(token, first_operand_key, second_operand_key)?;
-
-                    operand_keys.push(operator_key);
+                Token::LiteralInteger(value) => {
+                    operand_keys.push(tree.add_node(Node::new_literal_integer(value)))
                 }
-                Token::Literal(_) | Token::Identifier(_) => operand_keys.push(tree.add_node(token)),
-                Token::OpenParenthesis | Token::CloseParenthesis => {
+                Token::Identifier(name) => {
+                    operand_keys.push(tree.add_node(Node::new_identifier(name)))
+                }
+                Token::LeftParentheses | Token::RightParentheses => {
                     bail!("There should not be any parenthesis present in the input")
+                }
+                _ => {
+                    let operand_two = operand_keys.pop().context("Expected a second operand")?;
+                    let operand_one = operand_keys.pop().context("Expected a first operand")?;
+
+                    let node = match token {
+                        Token::Plus => Node::new_binary_addition(operand_one, operand_two),
+                        Token::Dash => Node::new_binary_subtraction(operand_one, operand_two),
+                        Token::Asterisk => Node::new_binary_multiplication(operand_one, operand_two),
+                        Token::ForwardSlash => Node::new_binary_division(operand_one, operand_two),
+                        Token::Caret => Node::new_binary_exponentiation(operand_one, operand_two),
+                        _ => bail!("Should be unreachable. If this occurs, check the other match-expression above.")
+                    };
+                    operand_keys.push(tree.add_node(node));
                 }
             }
         }
@@ -110,7 +306,7 @@ impl<S: Debug> ExpressionTree<S> {
         Ok(valid_tree)
     }
 
-    pub fn set_root(self, new_root: TokenKey) -> ExpressionTree<Valid> {
+    pub fn set_root(self, new_root: NodeKey) -> ExpressionTree<Valid> {
         // TODO: implement "root-node" that is always present, with a single child
         // TODO: being the start of the real tree
         ExpressionTree {
@@ -119,180 +315,278 @@ impl<S: Debug> ExpressionTree<S> {
         }
     }
 
-    pub fn left_child_of(&self, node: TokenKey) -> Option<TokenKey> {
-        let node = self.nodes.get(node)?;
-        node.left
-    }
-
-    pub fn right_child_of(&self, node: TokenKey) -> Option<TokenKey> {
-        let node = self.nodes.get(node)?;
-        node.right
-    }
-
-    pub fn add_node(&mut self, token: Token) -> TokenKey {
-        let node = TokenNode::new(token);
+    pub fn add_node(&mut self, node: Node) -> NodeKey {
         self.nodes.insert(node)
-    }
-
-    pub fn add_node_children(
-        &mut self,
-        token: Token,
-        left: TokenKey,
-        right: TokenKey,
-    ) -> Result<TokenKey> {
-        let node = TokenNode::new_children(token, left, right);
-        let parent_key = self.nodes.insert(node);
-        Ok(parent_key)
     }
 }
 
 impl ExpressionTree<Valid> {
-    pub fn root_key(&self) -> TokenKey {
+    pub fn root_key(&self) -> NodeKey {
         self.state.root_key
     }
 
-    pub fn token_of(&self, key: TokenKey) -> Result<&Token> {
-        let node = self.node_of(key)?;
-        Ok(&node.token)
+    pub fn get_node(&self, key: NodeKey) -> Option<&Node> {
+        self.nodes.get(key)
     }
 
-    pub fn mut_token_of(&mut self, key: TokenKey) -> Result<&mut Token> {
-        let node = self.mut_node_of(key)?;
-        Ok(&mut node.token)
+    pub fn get_mut_node(&mut self, key: NodeKey) -> Option<&mut Node> {
+        self.nodes.get_mut(key)
     }
 
-    fn node_of(&self, key: TokenKey) -> Result<&TokenNode> {
-        let node = self.nodes.get(key).context("Could not find node in tree")?;
-        Ok(&node)
-    }
-
-    fn mut_node_of(&mut self, key: TokenKey) -> Result<&mut TokenNode> {
-        let node = self
-            .nodes
-            .get_mut(key)
-            .context("Could not find node in tree")?;
-        Ok(node)
-    }
-
-    pub fn clone_node_of(&mut self, key: TokenKey) -> Result<TokenKey> {
-        let node = self.node_of(key)?;
+    pub fn clone_node_of(&mut self, key: NodeKey) -> Result<NodeKey> {
+        let node = self.get_node(key).context("Could not find node in tree")?;
         let cloned = node.clone();
         let cloned_key = self.nodes.insert(cloned);
         Ok(cloned_key)
     }
 
-    pub fn is_leaf(&self, key: TokenKey) -> bool {
+    pub fn is_leaf(&self, key: NodeKey) -> bool {
         match self.nodes.get(key) {
-            None => false,
-            Some(node) => node.left.is_none() && node.right.is_none(),
+            Some(node) => node.is_value(),
+            _ => false,
         }
     }
 
     pub fn replace_child_of(
         &mut self,
-        key: TokenKey,
-        old_child: TokenKey,
-        new_child: TokenKey,
+        key: NodeKey,
+        old_child: NodeKey,
+        new_child: NodeKey,
     ) -> Result<()> {
-        let node = self.mut_node_of(key)?;
-        let child_ref = if node.left == Some(old_child) {
-            &mut node.left
-        } else if node.right == Some(old_child) {
-            &mut node.right
-        } else {
-            return Err(anyhow!("old_child is not a child of the given node"));
-        };
-        *child_ref = Some(new_child);
-        Ok(())
-    }
-
-    pub fn set_children_of(
-        &mut self,
-        key: TokenKey,
-        left_child: TokenKey,
-        right_child: TokenKey,
-    ) -> Result<()> {
-        let node = self.mut_node_of(key)?;
-        node.set_left(left_child);
-        node.set_right(right_child);
-        Ok(())
+        let node = self
+            .get_mut_node(key)
+            .context("Expected node to exist in tree")?;
+        match node {
+            Node::LiteralInteger(_) | Node::Identifier(_) => {
+                Err(anyhow!("Value nodes do not have children"))
+            }
+            Node::Summation {
+                add: ref mut left,
+                subtract: ref mut right,
+            }
+            | Node::Multiplication {
+                multiply: ref mut left,
+                divide: ref mut right,
+            } => {
+                let child_ref = left
+                    .iter_mut()
+                    .chain(right.iter_mut())
+                    .filter(|key| **key == old_child)
+                    .next()
+                    .context("Could not find child of node")?;
+                *child_ref = new_child;
+                Ok(())
+            }
+            Node::BinaryOperation {
+                ref mut left_operand,
+                ref mut right_operand,
+                ..
+            } => {
+                let child_ref = if left_operand == &old_child {
+                    left_operand
+                } else if right_operand == &old_child {
+                    right_operand
+                } else {
+                    return Err(anyhow!("Old child is not a child of the given node"));
+                };
+                *child_ref = new_child;
+                Ok(())
+            }
+        }
     }
 
     pub fn to_infix(&self) -> Result<Vec<Token>> {
-        self.build_expression(self.root_key())
+        let root_node = self
+            .get_node(self.root_key())
+            .context("Expected a root node")?;
+        self.build_expression(None, root_node)
     }
 
-    fn build_expression(&self, node: TokenKey) -> Result<Vec<Token>> {
-        let mut tokens: Vec<Token> = Vec::new();
+    fn build_expression(&self, parent_node: Option<&Node>, node: &Node) -> Result<Vec<Token>> {
+        match node {
+            Node::LiteralInteger(value) => Ok(vec![Token::LiteralInteger(*value)]),
+            Node::Identifier(name) => Ok(vec![Token::Identifier(name.to_string())]),
+            Node::Summation { add, subtract } => {
+                let mut tokens = Vec::new();
+                let mut add_tokens = self.build_group_tokens(Some(node), add.iter(), Token::Plus);
+                let mut subtract_tokens =
+                    self.build_group_tokens(Some(node), subtract.iter(), Token::Dash);
 
-        if let Some(left_node) = self.left_child_of(node) {
-            let mut subtree_tokens = self.build_expression_subtree(node, left_node)?;
-            tokens.append(&mut subtree_tokens);
+                Self::parenthesize_if_precedence(
+                    parent_node,
+                    Operator::Add,
+                    &mut tokens,
+                    |tokens| {
+                        tokens.append(&mut add_tokens);
+                        if subtract_tokens.len() > 0 {
+                            tokens.push(Token::Dash);
+                            tokens.append(&mut subtract_tokens);
+                        }
+                    },
+                );
+
+                Ok(tokens)
+            }
+            Node::Multiplication { multiply, divide } => {
+                let mut tokens = Vec::new();
+                let mut multiply_tokens =
+                    self.build_group_tokens(Some(node), multiply.iter(), Token::Asterisk);
+                let mut divide_tokens =
+                    self.build_group_tokens(Some(node), divide.iter(), Token::Asterisk);
+                tokens.append(&mut multiply_tokens);
+                if divide_tokens.len() > 0 {
+                    tokens.push(Token::ForwardSlash);
+                    tokens.push(Token::LeftParentheses);
+                    tokens.append(&mut divide_tokens);
+                    tokens.push(Token::RightParentheses);
+                }
+                Ok(tokens)
+            }
+            Node::BinaryOperation {
+                operator,
+                left_operand,
+                right_operand,
+            } => {
+                let mut tokens = Vec::new();
+                let left_node = self
+                    .get_node(*left_operand)
+                    .context("Expected left operand to exist")?;
+                let right_node = self
+                    .get_node(*right_operand)
+                    .context("Expected right operand to exist")?;
+
+                let mut left_tokens = self.build_expression(Some(node), left_node)?;
+                let mut right_tokens = self.build_expression(Some(node), right_node)?;
+
+                Self::parenthesize_if_precedence(
+                    parent_node,
+                    Operator::Multiply,
+                    &mut tokens,
+                    |tokens| {
+                        tokens.append(&mut left_tokens);
+                        tokens.push(operator.token());
+                        tokens.append(&mut right_tokens);
+                    },
+                );
+
+                Ok(tokens)
+            }
         }
-
-        let token = self.token_of(node)?;
-        tokens.push(token.clone());
-
-        if let Some(right_node) = self.right_child_of(node) {
-            let mut subtree_tokens = self.build_expression_subtree(node, right_node)?;
-            tokens.append(&mut subtree_tokens);
-        }
-
-        Ok(tokens)
     }
 
-    fn build_expression_subtree(&self, node: TokenKey, child_node: TokenKey) -> Result<Vec<Token>> {
-        let mut subtree_tokens: Vec<Token> = Vec::new();
-        if let Ok(Token::Operator(other_operator)) = self.token_of(child_node) {
-            let mut close_parentheses = false;
-            if let Ok(Token::Operator(operator)) = self.token_of(node) {
-                // When a child operator has lower precedence, it and its operands needs
-                // to be wrapped in parentheses.
-                if operator > other_operator {
-                    subtree_tokens.push(Token::OpenParenthesis);
-                    close_parentheses = true;
+    fn parenthesize_if_necessary(
+        tokens: &mut Vec<Token>,
+        predicate: impl Fn() -> bool,
+        mut build_interior: impl FnMut(&mut Vec<Token>),
+    ) {
+        let mut close_parentheses = false;
+
+        if predicate() {
+            tokens.push(Token::LeftParentheses);
+            close_parentheses = true;
+        }
+
+        build_interior(tokens);
+
+        if close_parentheses {
+            tokens.push(Token::RightParentheses);
+        }
+    }
+
+    fn parenthesize_if_precedence(
+        parent_node: Option<&Node>,
+        operator: Operator,
+        tokens: &mut Vec<Token>,
+        build_interior: impl FnMut(&mut Vec<Token>),
+    ) {
+        let predicate = || {
+            if let Some(parent) = parent_node {
+                if let Some(parent_operator) = parent.get_operator() {
+                    // When a child operator has lower precedence, it and its operands needs
+                    // to be wrapped in parentheses.
+                    if parent_operator > operator {
+                        return true;
+                    }
                 }
             }
+            false
+        };
 
-            // Recurse so that the entire subtree will be contained within
-            // any potential parentheses.
-            let mut child_tokens = self.build_expression(child_node)?;
-            subtree_tokens.append(&mut child_tokens);
-
-            if close_parentheses {
-                subtree_tokens.push(Token::CloseParenthesis);
-            }
-        } else {
-            let child_token = self.token_of(child_node)?;
-            subtree_tokens.push(child_token.clone());
-        }
-        Ok(subtree_tokens)
+        Self::parenthesize_if_necessary(tokens, predicate, build_interior);
     }
 
-    fn write_node(&self, node: TokenKey, builder: &mut TreeBuilder) {
-        let node_name = match self.token_of(node) {
-            Err(_) => return,
-            Ok(token) => {
-                format!("{}", token)
-            }
-        };
+    fn build_group_tokens<'a>(
+        &self,
+        parent_node: Option<&Node>,
+        iterator: impl Iterator<Item = &'a NodeKey>,
+        intersperse_with: Token,
+    ) -> Vec<Token> {
+        iterator
+            .filter_map(|key| self.get_node(*key))
+            .filter_map(|node| self.build_expression(parent_node, node).ok())
+            .intersperse(vec![intersperse_with])
+            .flatten()
+            .collect()
+    }
 
-        if self.is_leaf(node) {
-            builder.add_empty_child(node_name);
-            return;
+    fn write_node(&self, node: NodeKey, builder: &mut TreeBuilder) {
+        match self.get_node(node) {
+            None => {}
+            Some(node) => match node {
+                Node::LiteralInteger(value) => {
+                    builder.add_empty_child(format!("{}", value));
+                }
+                Node::Identifier(name) => {
+                    builder.add_empty_child(format!("{}", name));
+                }
+                Node::Summation { add, subtract } => {
+                    builder.begin_child("GroupSumSub".into());
+                    if add.len() > 0 {
+                        builder.begin_child("Sum".into());
+                        for key in add {
+                            self.write_node(*key, builder)
+                        }
+                        builder.end_child();
+                    }
+                    if subtract.len() > 0 {
+                        builder.begin_child("Sub".into());
+                        for key in subtract {
+                            self.write_node(*key, builder)
+                        }
+                        builder.end_child();
+                    }
+                    builder.end_child();
+                }
+                Node::Multiplication { multiply, divide } => {
+                    builder.begin_child("GroupMulDiv".into());
+                    if multiply.len() > 0 {
+                        builder.begin_child("Mul".into());
+                        for key in multiply {
+                            self.write_node(*key, builder)
+                        }
+                        builder.end_child();
+                    }
+                    if divide.len() > 0 {
+                        builder.begin_child("Div".into());
+                        for key in divide {
+                            self.write_node(*key, builder)
+                        }
+                        builder.end_child();
+                    }
+                    builder.end_child();
+                }
+                Node::BinaryOperation {
+                    operator,
+                    left_operand,
+                    right_operand,
+                } => {
+                    builder.begin_child(format!("{}", operator));
+                    self.write_node(*left_operand, builder);
+                    self.write_node(*right_operand, builder);
+                    builder.end_child();
+                }
+            },
         }
-
-        builder.begin_child(node_name);
-
-        match self.left_child_of(node) {
-            None => {}
-            Some(left_node) => self.write_node(left_node, builder),
-        };
-        match self.right_child_of(node) {
-            None => {}
-            Some(right_node) => self.write_node(right_node, builder),
-        };
-        builder.end_child();
     }
 }
 
@@ -321,36 +615,6 @@ fn format_tree(tree: &ExpressionTree<Valid>, f: &mut Formatter<'_>) -> fmt::Resu
         Err(_) => return Err(fmt::Error),
     };
     f.write_str(text)
-}
-
-impl TokenNode {
-    fn new(token: Token) -> TokenNode {
-        TokenNode {
-            token,
-            left: None,
-            right: None,
-        }
-    }
-
-    fn new_children(token: Token, left: TokenKey, right: TokenKey) -> TokenNode {
-        TokenNode {
-            token,
-            left: Some(left),
-            right: Some(right),
-        }
-    }
-
-    fn set_left(&mut self, node_key: TokenKey) {
-        self.left = Some(node_key);
-    }
-
-    fn set_right(&mut self, node_key: TokenKey) {
-        self.right = Some(node_key);
-    }
-
-    fn is_leaf(&self) -> bool {
-        self.left.is_none() && self.right.is_none()
-    }
 }
 
 #[cfg(test)]
@@ -406,9 +670,9 @@ mod tests {
 
     fn create_simple_tree() -> ExpressionTree<Valid> {
         let mut nodes = SlotMap::with_key();
-        let x = nodes.insert(TokenNode::new(Token::Identifier("x".into())));
-        let y = nodes.insert(TokenNode::new(Token::Identifier("y".into())));
-        let plus = nodes.insert(TokenNode::new_children("+".parse().unwrap(), x, y));
+        let x = nodes.insert(Node::new_identifier("x".into()));
+        let y = nodes.insert(Node::new_identifier("y".into()));
+        let plus = nodes.insert(Node::new_binary_addition(x, y));
 
         ExpressionTree {
             nodes,
@@ -421,7 +685,7 @@ mod tests {
         let tokens = [
             Token::Identifier("x".to_string()),
             Token::Identifier("y".to_string()),
-            "+".parse().unwrap(),
+            Token::Plus,
         ]
         .to_vec();
         tokens
@@ -431,7 +695,7 @@ mod tests {
         // x + y
         let tokens = [
             Token::Identifier("x".to_string()),
-            "+".parse().unwrap(),
+            Token::Plus,
             Token::Identifier("y".to_string()),
         ]
         .to_vec();
@@ -444,10 +708,10 @@ mod tests {
             Token::Identifier("x".to_string()),
             Token::Identifier("y".to_string()),
             Token::Identifier("z".to_string()),
-            "+".parse().unwrap(),
+            Token::Plus,
             Token::Identifier("a".to_string()),
-            "*".parse().unwrap(),
-            "+".parse().unwrap(),
+            Token::Asterisk,
+            Token::Plus,
         ]
         .to_vec()
     }
@@ -456,13 +720,13 @@ mod tests {
         // x + (y + z) * a
         [
             Token::Identifier("x".to_string()),
-            "+".parse().unwrap(),
-            Token::OpenParenthesis,
+            Token::Plus,
+            Token::LeftParentheses,
             Token::Identifier("y".to_string()),
-            "+".parse().unwrap(),
+            Token::Plus,
             Token::Identifier("z".to_string()),
-            Token::CloseParenthesis,
-            "*".parse().unwrap(),
+            Token::RightParentheses,
+            Token::Asterisk,
             Token::Identifier("a".to_string()),
         ]
         .to_vec()
@@ -470,17 +734,13 @@ mod tests {
 
     fn create_complex_tree() -> ExpressionTree<Valid> {
         let mut nodes = SlotMap::with_key();
-        let x = nodes.insert(TokenNode::new(Token::Identifier("x".into())));
-        let y = nodes.insert(TokenNode::new(Token::Identifier("y".into())));
-        let z = nodes.insert(TokenNode::new(Token::Identifier("z".into())));
-        let a = nodes.insert(TokenNode::new(Token::Identifier("a".into())));
-        let second_plus = nodes.insert(TokenNode::new_children("+".parse().unwrap(), y, z));
-        let star = nodes.insert(TokenNode::new_children(
-            "*".parse().unwrap(),
-            second_plus,
-            a,
-        ));
-        let first_plus = nodes.insert(TokenNode::new_children("+".parse().unwrap(), x, star));
+        let x = nodes.insert(Node::new_identifier("x".into()));
+        let y = nodes.insert(Node::new_identifier("y".into()));
+        let z = nodes.insert(Node::new_identifier("z".into()));
+        let a = nodes.insert(Node::new_identifier("a".into()));
+        let second_plus = nodes.insert(Node::new_binary_addition(y, z));
+        let star = nodes.insert(Node::new_binary_multiplication(second_plus, a));
+        let first_plus = nodes.insert(Node::new_binary_addition(x, star));
 
         ExpressionTree {
             nodes,

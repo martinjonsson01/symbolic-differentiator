@@ -7,11 +7,15 @@ use std::str;
 /// A discrete part of an expression
 #[derive(Clone, PartialEq)]
 pub enum Token {
-    Literal(f64),
+    LiteralInteger(i32),
     Identifier(String),
-    Operator(Operator),
-    OpenParenthesis,
-    CloseParenthesis,
+    Plus,
+    Dash,
+    Asterisk,
+    ForwardSlash,
+    Caret,
+    LeftParentheses,
+    RightParentheses,
 }
 
 pub static SYMBOLS: [char; 7] = ['+', '-', '*', '/', '^', '(', ')'];
@@ -28,28 +32,22 @@ impl Token {
     }
     
     pub fn is_literal(&self) -> bool {
-        matches!(self, Token::Literal(_))
-    }
-
-    pub fn is_caret(&self) -> bool {
-        let _caret = "^".to_string();
-        matches!(self, Token::Operator(Operator { symbol: _caret, .. }))
-    }
-    
-    pub fn is_multiplication(&self) -> bool {
-        let _star = "*".to_string();
-        matches!(self, Token::Operator(Operator { symbol: _star, .. }))
+        matches!(self, Token::LiteralInteger(_))
     }
 }
 
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Token::Literal(value) => write!(f, "{}", value),
+            Token::LiteralInteger(value) => write!(f, "{}", value),
             Token::Identifier(name) => write!(f, "{}", name),
-            Token::Operator(operator) => write!(f, "{}", operator),
-            Token::OpenParenthesis => write!(f, "("),
-            Token::CloseParenthesis => write!(f, ")"),
+            Token::Plus => write!(f, "+"),
+            Token::Dash => write!(f, "-"),
+            Token::Asterisk => write!(f, "*"),
+            Token::ForwardSlash => write!(f, "/"),
+            Token::Caret => write!(f, "^"),
+            Token::LeftParentheses => write!(f, "("),
+            Token::RightParentheses => write!(f, ")"),
         }
     }
 }
@@ -59,47 +57,22 @@ impl str::FromStr for Token {
 
     fn from_str(input: &str) -> Result<Token, Self::Err> {
         match input {
-            "+" => Ok(Token::Operator(Operator {
-                symbol: "+".into(),
-                precedence: 0,
-                associativity: Associativity::Left,
-                evaluate: |a, b| a + b,
-            })),
-            "-" => Ok(Token::Operator(Operator {
-                symbol: "-".into(),
-                precedence: 0,
-                associativity: Associativity::Left,
-                evaluate: |a, b| a - b,
-            })),
-            "*" => Ok(Token::Operator(Operator {
-                symbol: "*".into(),
-                precedence: 1,
-                associativity: Associativity::Left,
-                evaluate: |a, b| a * b,
-            })),
-            "/" => Ok(Token::Operator(Operator {
-                symbol: "/".into(),
-                precedence: 1,
-                associativity: Associativity::Left,
-                evaluate: |a, b| a / b,
-            })),
-            "^" => Ok(Token::Operator(Operator {
-                symbol: "^".into(),
-                precedence: 2,
-                associativity: Associativity::Right,
-                evaluate: |a, b| f64::powf(a, b),
-            })),
-            "(" => Ok(Token::OpenParenthesis),
-            ")" => Ok(Token::CloseParenthesis),
+            "+" => Ok(Token::Plus),
+            "-" => Ok(Token::Dash),
+            "*" => Ok(Token::Asterisk),
+            "/" => Ok(Token::ForwardSlash),
+            "^" => Ok(Token::Caret),
+            "(" => Ok(Token::LeftParentheses),
+            ")" => Ok(Token::RightParentheses),
             input => Ok(parse_literal_or_identifier(input)),
         }
     }
 }
 
 fn parse_literal_or_identifier(text: &str) -> Token {
-    let number = text.parse::<f64>();
+    let number = text.parse::<i32>();
     match number {
-        Ok(value) => Token::Literal(value),
+        Ok(value) => Token::LiteralInteger(value),
         Err(_) => Token::Identifier(text.to_string()),
     }
 }

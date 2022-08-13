@@ -1,5 +1,5 @@
 use crate::interpreter::operator::Operator;
-use crate::interpreter::parser::expression_tree::{ExpressionTree, TokenKey, Valid};
+use crate::interpreter::parser::expression_tree::{ExpressionTree, Node, NodeKey, Valid};
 use crate::interpreter::{find_matching_node, Token};
 use anyhow::{anyhow, bail, Context, Result};
 
@@ -8,7 +8,7 @@ use anyhow::{anyhow, bail, Context, Result};
 /// # Arguments
 ///
 /// * `tree`: The expression to differentiate, represented as an expression tree.
-/// * `with_respect_to`: The token to differentiate with respect to. Usually an identifier.
+/// * `with_respect_to`: The expression node to differentiate with respect to. Usually an identifier.
 ///
 /// returns: The derivative of the input expression tree represented as an expression tree.
 ///
@@ -19,7 +19,7 @@ use anyhow::{anyhow, bail, Context, Result};
 /// let tokens = [
 /// variable,
 /// Token::Identifier("2".to_string()),
-/// "^".parse().unwrap(),
+/// Operator::Exponentiate.token(),
 /// ]
 /// .to_vec();
 /// let tree = ExpressionTree::new(tokens).unwrap();
@@ -28,7 +28,7 @@ use anyhow::{anyhow, bail, Context, Result};
 /// ```
 pub fn find_derivative(
     mut tree: ExpressionTree<Valid>,
-    with_respect_to: &Token,
+    with_respect_to: &Node,
 ) -> Result<ExpressionTree<Valid>> {
     let root_key = tree.root_key();
     let new_root = differentiate_subtree(&mut tree, root_key, with_respect_to)?;
@@ -38,49 +38,60 @@ pub fn find_derivative(
 
 fn differentiate_subtree(
     tree: &mut ExpressionTree<Valid>,
-    node: TokenKey,
-    with_respect_to: &Token,
-) -> Result<TokenKey> {
-    match tree.token_of(node) {
-        Ok(Token::Operator(operator)) => {
+    node: NodeKey,
+    with_respect_to: &Node,
+) -> Result<NodeKey> {
+    match tree.get_node(node) {
+        Some(Node::BinaryOperation {
+            operator,
+            left_operand,
+            right_operand,
+        }) => {
             let left_child = tree
-                .left_child_of(node)
+                .get_node(*left_operand)
                 .context("Expected a left operand")?;
-            let right_child = tree
-                .right_child_of(node)
-                .context("Expected a right operand")?;
-            let children = vec![left_child, right_child];
+            
+            let right_key = right_operand.clone();
 
-            return if operator.symbol == "^" {
-                let base = tree.token_of(left_child)?;
-                if base != with_respect_to {
+            return if *operator == Operator::Exponentiate {
+                if left_child != with_respect_to {
                     bail!("Can not differentiate with respect to this variable")
                 }
 
-                let exponent = tree.clone_node_of(right_child)?;
-                let multiply_node = tree.add_node_children("*".parse().unwrap(), exponent, node)?;
+                let exponent = tree.clone_node_of(right_key)?;
+                let multiply_node = Node::new_binary_multiplication(exponent, node);
+                let multiply_key = tree.add_node(multiply_node);
 
-                let subtraction = create_subtract_one(tree, right_child)?;
-                tree.replace_child_of(node, right_child, subtraction)?;
+                let subtraction = create_subtract_one(tree, right_key)?;
+                tree.replace_child_of(node, right_key, subtraction)?;
 
-                Ok(multiply_node)
-            } else if operator.symbol == "*" {
-                find_matching_node(tree, &children, |token| token.is_value())
-                    .context("Expected a value child")?;
-                let caret_key = find_matching_node(tree, &children, |token| token.is_caret())
-                    .context("Expected an exponentiation child")?;
-
-                let new_root = differentiate_subtree(tree, caret_key, with_respect_to)?;
-                tree.replace_child_of(node, caret_key, new_root)?;
-                Ok(node)
+                Ok(multiply_key)
             } else {
                 Err(anyhow!("Could not differentiate expression"))
             };
         }
-        Ok(Token::Identifier(variable_name)) => {
-            if *variable_name == with_respect_to.to_string() {
-                let one = Token::Literal(1f64);
-                let one_node = tree.add_node(one);
+        Some(Node::Multiplication { multiply, divide }) => {
+            if multiply.len() == 2 && divide.len() == 0 {
+                
+                let multiply = multiply.clone();
+                
+                find_matching_node(tree, multiply.iter(), |token| token.is_value())
+                    .context("Expected a value child")?;
+                let exponentiate_key = find_matching_node(tree, multiply.iter(), |token| {
+                    token.is_operator(Operator::Exponentiate)
+                })
+                .context("Expected an exponentiation child")?;
+
+                let new_root = differentiate_subtree(tree, exponentiate_key, with_respect_to)?;
+                tree.replace_child_of(node, exponentiate_key, new_root)?;
+                Ok(node)
+            } else {
+                Err(anyhow!("Could not differentiate expression"))
+            }
+        }
+        Some(Node::Identifier(variable_name)) => {
+            if with_respect_to.is_identifier(variable_name) {
+                let one_node = tree.add_node(Node::new_literal_integer(1));
                 Ok(one_node)
             } else {
                 Ok(node)
@@ -91,10 +102,10 @@ fn differentiate_subtree(
 }
 
 /// Returns node 'from' with a subtraction node: from - 1
-fn create_subtract_one(tree: &mut ExpressionTree<Valid>, from: TokenKey) -> Result<TokenKey> {
-    let one = tree.add_node(Token::Literal(1f64));
-    let subtraction = tree.add_node_children("-".parse().unwrap(), from, one)?;
-    Ok(subtraction)
+fn create_subtract_one(tree: &mut ExpressionTree<Valid>, from: NodeKey) -> Result<NodeKey> {
+    let one = tree.add_node(Node::LiteralInteger(1));
+    let subtraction = Node::new_binary_subtraction(from, one);
+    Ok(tree.add_node(subtraction))
 }
 
 #[cfg(test)]
@@ -106,20 +117,25 @@ mod tests {
     fn simple_exponent_term_is_differentiated_correctly() {
         // x^2 (but in postfix notation)
         let variable = Token::Identifier("x".to_string());
-        let tokens = vec![variable.clone(), Token::Literal(2f64), "^".parse().unwrap()];
+        let tokens = vec![
+            variable.clone(),
+            Token::LiteralInteger(2),
+            Operator::Exponentiate.token(),
+        ];
         let tree = ExpressionTree::<Valid>::new(tokens).unwrap();
 
-        let actual_tree = find_derivative(tree, &variable).unwrap();
+        let with_respect_to = Node::new_identifier(variable.to_string());
+        let actual_tree = find_derivative(tree, &with_respect_to).unwrap();
 
         // 2 * x^(2 - 1) (but in postfix notation)
         let expected_tokens = vec![
-            Token::Literal(2f64),
+            Token::LiteralInteger(2),
             variable.clone(),
-            Token::Literal(2f64),
-            Token::Literal(1f64),
-            "-".parse().unwrap(),
-            "^".parse().unwrap(),
-            "*".parse().unwrap(),
+            Token::LiteralInteger(2),
+            Token::LiteralInteger(1),
+            Operator::Subtract.token(),
+            Operator::Exponentiate.token(),
+            Token::Asterisk,
         ];
         let expected_tree = ExpressionTree::<Valid>::new(expected_tokens).unwrap();
 
@@ -131,27 +147,28 @@ mod tests {
         // 3 * x^y (but in postfix notation)
         let variable = Token::Identifier("x".to_string());
         let tokens = vec![
-            Token::Literal(3f64),
+            Token::LiteralInteger(3),
             variable.clone(),
             Token::Identifier("y".to_string()),
-            "^".parse().unwrap(),
-            "*".parse().unwrap(),
+            Operator::Exponentiate.token(),
+            Token::Asterisk,
         ];
         let tree = ExpressionTree::<Valid>::new(tokens).unwrap();
 
-        let actual_tree = find_derivative(tree, &variable).unwrap();
+        let with_respect_to = Node::new_identifier(variable.to_string());
+        let actual_tree = find_derivative(tree, &with_respect_to).unwrap();
 
         // 3 * (y * x^(y-1)) (but in postfix notation)
         let expected_tokens = vec![
-            Token::Literal(3f64),
+            Token::LiteralInteger(3),
             Token::Identifier("y".to_string()),
             variable.clone(),
             Token::Identifier("y".to_string()),
-            Token::Literal(1f64),
-            "-".parse().unwrap(),
-            "^".parse().unwrap(),
-            "*".parse().unwrap(),
-            "*".parse().unwrap(),
+            Token::LiteralInteger(1),
+            Operator::Subtract.token(),
+            Operator::Exponentiate.token(),
+            Token::Asterisk,
+            Token::Asterisk,
         ];
         let expected_tree = ExpressionTree::<Valid>::new(expected_tokens).unwrap();
 
@@ -164,26 +181,27 @@ mod tests {
         let variable = Token::Identifier("x".to_string());
         let tokens = vec![
             variable.clone(),
-            Token::Literal(4f64),
-            "^".parse().unwrap(),
-            Token::Literal(3f64),
-            "*".parse().unwrap(),
+            Token::LiteralInteger(4),
+            Operator::Exponentiate.token(),
+            Token::LiteralInteger(3),
+            Token::Asterisk,
         ];
         let tree = ExpressionTree::<Valid>::new(tokens).unwrap();
 
-        let actual_tree = find_derivative(tree, &variable).unwrap();
+        let with_respect_to = Node::new_identifier(variable.to_string());
+        let actual_tree = find_derivative(tree, &with_respect_to).unwrap();
 
         // (4 * x^(4-1)) * 3 (but in postfix notation)
         let expected_tokens = vec![
-            Token::Literal(4f64),
+            Token::LiteralInteger(4),
             variable.clone(),
-            Token::Literal(4f64),
-            Token::Literal(1f64),
-            "-".parse().unwrap(),
-            "^".parse().unwrap(),
-            "*".parse().unwrap(),
-            Token::Literal(3f64),
-            "*".parse().unwrap(),
+            Token::LiteralInteger(4),
+            Token::LiteralInteger(1),
+            Operator::Subtract.token(),
+            Operator::Exponentiate.token(),
+            Token::Asterisk,
+            Token::LiteralInteger(3),
+            Token::Asterisk,
         ];
         let expected_tree = ExpressionTree::<Valid>::new(expected_tokens).unwrap();
 

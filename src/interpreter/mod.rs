@@ -6,11 +6,11 @@ mod simplifier;
 pub mod token;
 
 use crate::find_derivative;
-use crate::interpreter::parser::expression_tree::{ExpressionTree, TokenKey, Valid};
+use crate::interpreter::parser::expression_tree::{ExpressionTree, Node, NodeKey, Valid};
+use crate::interpreter::simplifier::simplify;
 use crate::interpreter::token::Token;
 use anyhow::{bail, Context, Result};
 use string_builder::Builder;
-use crate::interpreter::simplifier::simplify;
 
 /// Calculates the derivative of the given expression with respect to the given variable.
 ///
@@ -33,15 +33,9 @@ use crate::interpreter::simplifier::simplify;
 /// ```
 pub fn differentiate(expression: String, with_respect_to: String) -> Result<String> {
     let expression_tree = convert(expression)?;
-    let variable_token: Token = match with_respect_to.parse::<Token>() {
-        Ok(token) => token,
-        Err(_) => bail!(
-            "Failed to convert {} into a variable token",
-            with_respect_to
-        ),
-    };
+    let variable = Node::new_identifier(with_respect_to);
     let simplified_expression = simplify(expression_tree)?;
-    let derivative = find_derivative(simplified_expression, &variable_token)?;
+    let derivative = find_derivative(simplified_expression, &variable)?;
     let simplified_derivative = simplify(derivative)?;
     let derivative_tokens = simplified_derivative.to_infix()?;
     tokens_to_string(derivative_tokens)
@@ -87,15 +81,12 @@ pub fn tokens_to_string(tokens: Vec<Token>) -> Result<String> {
 
     for token in tokens {
         match token {
-            Token::Literal(value) => builder.append(format!("{:.0}", value)),
-            Token::Operator(operator) => {
-                if operator.symbol == "^".to_string() {
-                    builder.append(operator.to_string());
-                } else {
-                    builder.append(" ");
-                    builder.append(operator.to_string());
-                    builder.append(" ");
-                }
+            Token::LiteralInteger(value) => builder.append(format!("{:.0}", value)),
+            Token::Caret => builder.append(token.to_string()),
+            Token::Plus | Token::Dash | Token::Asterisk | Token::ForwardSlash => {
+                builder.append(" ");
+                builder.append(token.to_string());
+                builder.append(" ");
             }
             _ => builder.append(token.to_string()),
         }
@@ -104,17 +95,17 @@ pub fn tokens_to_string(tokens: Vec<Token>) -> Result<String> {
     builder.string().context("Failed to build token string")
 }
 
-fn find_matching_node<F>(
+fn find_matching_node<'a, F>(
     tree: &mut ExpressionTree<Valid>,
-    keys: &Vec<TokenKey>,
+    keys: impl Iterator<Item = &'a NodeKey>,
     predicate: F,
-) -> Option<TokenKey>
-    where
-        F: Fn(&Token) -> bool,
+) -> Option<NodeKey>
+where
+    F: Fn(&Node) -> bool,
 {
     for child_key in keys {
-        let token = tree.token_of(*child_key).ok()?;
-        if predicate(token) {
+        let node = tree.get_node(*child_key)?;
+        if predicate(node) {
             return Some(*child_key);
         }
     }

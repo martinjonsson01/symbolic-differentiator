@@ -113,6 +113,13 @@ fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Resu
                 }
             }
 
+            if left_key != left_simplified {
+                tree.replace_child_of(node, left_key, left_simplified)?;
+            }
+            if right_key != right_simplified {
+                tree.replace_child_of(node, right_key, right_simplified)?;
+            }
+
             return try_evaluate_as_literals(
                 &mut tree,
                 node,
@@ -324,6 +331,7 @@ mod tests {
     fn simplify_expression_returns_expected(expression: &str, expected_simplification: &str) {
         /* Not part of test, only used to simplify parameters by not using tree structs. */
         let expression_tree = convert(expression.to_string()).unwrap();
+        print!("{}", expression_tree);
         /* End */
 
         let actual_simplification_tree = simplify(expression_tree).unwrap();
@@ -339,7 +347,7 @@ mod tests {
 
     #[test]
     fn simplify_expression_returns_expected_example() {
-        simplify_expression_returns_expected("(x + y) * (z + 0)", "(x + y) * z")
+        simplify_expression_returns_expected("(x + 0)^(10^2 * 100) - 0 * (x + y) / (z - 0)", "x^10000")
     }
 
     #[parameterized(

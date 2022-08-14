@@ -1,8 +1,8 @@
+use crate::interpreter::find_matching_node;
 use crate::interpreter::operator::Operator;
 use crate::interpreter::parser::expression_tree::{
     CompositeData, ExpressionTree, Node, NodeKey, Valid,
 };
-use crate::interpreter::{find_matching_node, Token};
 use anyhow::{anyhow, bail, Context, Result};
 
 /// Differentiates the given expression tree with respect to the given variable.
@@ -53,9 +53,9 @@ fn differentiate_subtree(
                 .get_node(*left_operand)
                 .context("Expected a left operand")?;
 
-            let right_key = right_operand.clone();
+            let right_key = *right_operand;
 
-            return if *operator == Operator::Exponentiate {
+            if *operator == Operator::Exponentiate {
                 if left_child != with_respect_to {
                     bail!("Can not differentiate with respect to this variable")
                 }
@@ -70,7 +70,7 @@ fn differentiate_subtree(
                 Ok(multiply_key)
             } else {
                 Err(anyhow!("Could not differentiate expression"))
-            };
+            }
         }
         Some(Node::Composite(CompositeData {
             operator: Operator::Multiply,
@@ -78,7 +78,7 @@ fn differentiate_subtree(
             right: divide,
             ..
         })) => {
-            if multiply.len() == 2 && divide.len() == 0 {
+            if multiply.len() == 2 && divide.is_empty() {
                 let multiply = multiply.clone();
 
                 find_matching_node(tree, multiply.iter(), |token| token.is_value())

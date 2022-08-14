@@ -8,7 +8,7 @@ use super::token::SYMBOLS;
 pub(super) fn tokenize(expression: String) -> Result<Vec<Token>> {
     let mut tokens: Vec<Token> = vec![];
 
-    let clean_expression = expression.replace(" ", "");
+    let clean_expression = expression.replace(' ', "");
     
     let mut start = 0;
     let mut length = 0;

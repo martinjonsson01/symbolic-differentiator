@@ -110,7 +110,7 @@ fn parse_operator_token(
                     | Token::Dash
                     | Token::Asterisk
                     | Token::ForwardSlash
-                    | Token::Caret => token_to_operator(&top_of_operator_stack)?,
+                    | Token::Caret => token_to_operator(top_of_operator_stack)?,
                     _ => {
                         bail!("Found non-operator in operator stack")
                     }

@@ -22,7 +22,7 @@ pub struct ExpressionTree<S: Debug> {
     state: S,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompositeData {
     pub(crate) operator: Operator,
     pub(crate) inverse_operator: Operator,
@@ -56,7 +56,7 @@ impl CompositeData {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Node {
     // Terminal symbols (leaves)
     LiteralInteger(i32),
@@ -143,18 +143,6 @@ impl Node {
         matches!(self, Node::Identifier(_) | Node::LiteralInteger(_))
     }
 
-    pub fn is_zero(&self) -> bool {
-        self.is_literal_integer(0)
-    }
-
-    pub fn is_one(&self) -> bool {
-        self.is_literal_integer(1)
-    }
-
-    pub fn is_literal(&self) -> bool {
-        matches!(self, Node::Identifier(_))
-    }
-
     pub fn is_literal_integer(&self, compare_to: i32) -> bool {
         match self {
             Node::LiteralInteger(value) => *value == compare_to,
@@ -174,27 +162,6 @@ impl Node {
             Node::LiteralInteger(_) | Node::Identifier(_) => None,
             Node::Composite(CompositeData { operator, .. }) => Some(*operator),
             Node::BinaryOperation { operator, .. } => Some(*operator),
-        }
-    }
-
-    pub fn map_children<Func>(&self, action: Func)
-    where
-        Func: Fn(&NodeKey),
-    {
-        match self {
-            Node::LiteralInteger(_) | Node::Identifier(_) => {}
-            Node::Composite(CompositeData { left, right, .. }) => {
-                left.iter().for_each(&action);
-                right.iter().for_each(action);
-            }
-            Node::BinaryOperation {
-                left_operand,
-                right_operand,
-                ..
-            } => {
-                action(left_operand);
-                action(right_operand);
-            }
         }
     }
 }
@@ -296,10 +263,9 @@ impl<S: Debug> ExpressionTree<S> {
     /// * `postfix_tokens`: Tokens, ordered in postfix notation, to convert to an expression tree.
     ///
     /// returns: The generated expression tree.
-    pub fn new(postfix_tokens: Vec<Token>) -> Result<ExpressionTree<Valid>> {
+    pub fn new(mut tokens: Vec<Token>) -> Result<ExpressionTree<Valid>> {
         let mut tree = Self::empty();
 
-        let mut tokens = postfix_tokens.clone();
         tokens.reverse();
         let mut operand_keys: Vec<NodeKey> = Vec::new();
 
@@ -370,13 +336,6 @@ impl ExpressionTree<Valid> {
         Ok(cloned_key)
     }
 
-    pub fn is_leaf(&self, key: NodeKey) -> bool {
-        match self.nodes.get(key) {
-            Some(node) => node.is_value(),
-            _ => false,
-        }
-    }
-
     pub fn replace_child_of(
         &mut self,
         key: NodeKey,
@@ -398,8 +357,7 @@ impl ExpressionTree<Valid> {
                 let child_ref = left
                     .iter_mut()
                     .chain(right.iter_mut())
-                    .filter(|key| **key == old_child)
-                    .next()
+                    .find(|key| **key == old_child)
                     .context("Could not find child of node")?;
                 *child_ref = new_child;
                 Ok(())
@@ -450,7 +408,7 @@ impl ExpressionTree<Valid> {
                     &mut tokens,
                     |tokens| {
                         tokens.append(&mut add_tokens);
-                        if subtract_tokens.len() > 0 {
+                        if !subtract_tokens.is_empty() {
                             tokens.push(Token::Dash);
                             tokens.append(&mut subtract_tokens);
                         }
@@ -495,7 +453,7 @@ impl ExpressionTree<Valid> {
                 Ok(tokens)
             }
             Node::Composite(_) => {
-                return Err(anyhow!("This composite node has not been implemented yet"))
+                Err(anyhow!("This composite node has not been implemented yet"))
             }
             Node::BinaryOperation {
                 operator,
@@ -530,7 +488,7 @@ impl ExpressionTree<Valid> {
     }
 
     /// If there are multiple child operators, it returns the one with highest precedence.
-    fn get_child_operator(&self, children: &Vec<NodeKey>) -> Option<Operator> {
+    fn get_child_operator(&self, children: &[NodeKey]) -> Option<Operator> {
         children
             .iter()
             .filter_map(|key| self.get_node(*key))
@@ -603,19 +561,19 @@ impl ExpressionTree<Valid> {
                     builder.add_empty_child(format!("{}", value));
                 }
                 Node::Identifier(name) => {
-                    builder.add_empty_child(format!("{}", name));
+                    builder.add_empty_child(name.to_string());
                 }
                 Node::Composite(data) => {
                     builder.begin_child(data.node_name());
-                    if data.left.len() > 0 {
-                        builder.begin_child(data.left_node_name().into());
+                    if !data.left.is_empty() {
+                        builder.begin_child(data.left_node_name());
                         for key in &data.left {
                             self.write_node(*key, builder)
                         }
                         builder.end_child();
                     }
-                    if data.right.len() > 0 {
-                        builder.begin_child(data.right_node_name().into());
+                    if !data.right.is_empty() {
+                        builder.begin_child(data.right_node_name());
                         for key in &data.right {
                             self.write_node(*key, builder)
                         }

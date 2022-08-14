@@ -3,7 +3,7 @@ use crate::interpreter::parser::expression_tree::{
     CompositeData, ExpressionTree, Node, NodeKey, Valid,
 };
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
 
 /// Simplifies a given expression tree.
 ///
@@ -31,11 +31,9 @@ pub fn simplify(mut tree: ExpressionTree<Valid>) -> Result<ExpressionTree<Valid>
     Ok(simplification)
 }
 
-fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Result<NodeKey> {
+fn simplify_subtree(tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Result<NodeKey> {
     match tree.get_node(node) {
-        Some(Node::LiteralInteger(_) | Node::Identifier(_)) => {
-            return Ok(node);
-        }
+        Some(Node::LiteralInteger(_) | Node::Identifier(_)) => Ok(node),
         Some(Node::Composite(data)) => {
             let data = data.clone();
             let mut new_left = vec![];
@@ -75,16 +73,16 @@ fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Resu
                 right: new_right,
                 ..data
             };
-            return try_evaluate_composites_as_literals(tree, new_data);
+            try_evaluate_composites_as_literals(tree, new_data)
         }
         Some(Node::BinaryOperation {
             operator,
             left_operand,
             right_operand,
         }) => {
-            let operator = operator.clone();
-            let left_key = left_operand.clone();
-            let right_key = right_operand.clone();
+            let operator = *operator;
+            let left_key = *left_operand;
+            let right_key = *right_operand;
             let left_simplified = simplify_subtree(tree, left_key)?;
             let right_simplified = simplify_subtree(tree, right_key)?;
 
@@ -118,15 +116,11 @@ fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Resu
                 tree.replace_child_of(node, right_key, right_simplified)?;
             }
 
-            return try_evaluate_as_literals(
-                &mut tree,
-                node,
-                &operator,
-                left_simplified,
-                right_simplified,
-            );
+            try_evaluate_as_literals(tree, node, &operator, left_simplified, right_simplified)
         }
-        None => bail!("The given node does not exist in the given expression tree"),
+        None => Err(anyhow!(
+            "The given node does not exist in the given expression tree"
+        )),
     }
 }
 
@@ -265,27 +259,25 @@ fn try_evaluate_composites_as_literals(
 
 fn cancel_composite_terms(
     tree: &mut ExpressionTree<Valid>,
-    first: &Vec<NodeKey>,
-    second: &Vec<NodeKey>,
+    first: &[NodeKey],
+    second: &[NodeKey],
 ) -> Result<Vec<NodeKey>> {
     let second_nodes = second
-        .into_iter()
-        .map(|key| {
-            tree.get_node(*key)
-                .context("Expected node to exist in tree")
-        })
+        .iter()
+        .copied()
+        .map(|key| tree.get_node(key).context("Expected node to exist in tree"))
         .collect::<Result<Vec<_>>>()?;
 
     let cancelled_first = first
-        .into_iter()
+        .iter()
         .filter(|key| contains_node_of_key(tree, &second_nodes, key))
-        .map(|key| *key)
+        .copied()
         .collect();
 
     Ok(cancelled_first)
 }
 
-fn contains_node_of_key(tree: &ExpressionTree<Valid>, nodes: &Vec<&Node>, key: &NodeKey) -> bool {
+fn contains_node_of_key(tree: &ExpressionTree<Valid>, nodes: &[&Node], key: &NodeKey) -> bool {
     match tree.get_node(*key) {
         None => false,
         Some(node) => !nodes.contains(&node),

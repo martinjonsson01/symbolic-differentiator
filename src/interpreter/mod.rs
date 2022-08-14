@@ -9,7 +9,7 @@ use crate::find_derivative;
 use crate::interpreter::parser::expression_tree::{ExpressionTree, Node, NodeKey, Valid};
 use crate::interpreter::simplifier::simplify;
 use crate::interpreter::token::Token;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use string_builder::Builder;
 
 /// Calculates the derivative of the given expression with respect to the given variable.

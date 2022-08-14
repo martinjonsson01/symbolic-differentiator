@@ -3,10 +3,9 @@ use crate::interpreter::differentiator::find_derivative;
 use crate::interpreter::token::Token;
 use anyhow::Result;
 use clap::Parser;
-use log::{error, info};
+use log::error;
 use std::io;
 use std::io::BufRead;
-use std::str::FromStr;
 
 mod interpreter;
 
@@ -37,7 +36,7 @@ fn main() -> Result<()> {
                 error!("Failed to read input, please input a correct string, or type 'q' to exit");
                 continue;
             }
-            Some(text) => text 
+            Some(text) => text,
         };
 
         if input == "q" {

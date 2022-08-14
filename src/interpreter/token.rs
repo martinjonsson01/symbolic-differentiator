@@ -1,11 +1,10 @@
-use crate::interpreter::operator::{Associativity, Operator};
 use anyhow::Result;
 use std::fmt;
 use std::fmt::Formatter;
 use std::str;
 
 /// A discrete part of an expression
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum Token {
     LiteralInteger(i32),
     Identifier(String),
@@ -19,22 +18,6 @@ pub enum Token {
 }
 
 pub static SYMBOLS: [char; 7] = ['+', '-', '*', '/', '^', '(', ')'];
-
-impl Token {
-    /// A 'value' is a token that either represents, contains or is a numerical value.
-    /// E.g. a literal or identifier.
-    pub fn is_value(&self) -> bool {
-        self.is_literal() || self.is_identifier()
-    }
-    
-    pub fn is_identifier(&self) -> bool {
-        matches!(self, Token::Identifier(_))
-    }
-    
-    pub fn is_literal(&self) -> bool {
-        matches!(self, Token::LiteralInteger(_))
-    }
-}
 
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

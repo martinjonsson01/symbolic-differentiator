@@ -65,7 +65,7 @@ impl Operator {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum Associativity {
     Left,
     Right,
@@ -73,7 +73,7 @@ pub enum Associativity {
 
 impl PartialEq for Operator {
     fn eq(&self, other: &Self) -> bool {
-        &self.precedence() == &other.precedence()
+        self.precedence() == other.precedence()
     }
 }
 

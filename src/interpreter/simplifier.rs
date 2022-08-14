@@ -1,6 +1,6 @@
 use crate::interpreter::operator::Operator;
 use crate::interpreter::parser::expression_tree::{
-    CompositeData, ExpressionTree, Node, NodeKey, Valid,
+    CompositeChild, CompositeData, ExpressionTree, Node, NodeKey, Valid,
 };
 
 use anyhow::{anyhow, Context, Result};
@@ -42,14 +42,14 @@ fn simplify_subtree(tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Result<N
             let mut left_leftovers = simplify_composite_children(
                 tree,
                 &data,
-                &data.left,
+                CompositeChild::Left,
                 &mut new_left,
                 &mut new_right,
             )?;
             let mut right_leftovers = simplify_composite_children(
                 tree,
                 &data,
-                &data.right,
+                CompositeChild::Right,
                 &mut new_left,
                 &mut new_right,
             )?;
@@ -127,12 +127,12 @@ fn simplify_subtree(tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Result<N
 fn simplify_composite_children(
     tree: &mut ExpressionTree<Valid>,
     parent: &CompositeData,
-    children: &Vec<NodeKey>,
+    which_child: CompositeChild,
     new_left: &mut Vec<NodeKey>,
     new_right: &mut Vec<NodeKey>,
 ) -> Result<Vec<NodeKey>> {
     let mut leftovers = vec![];
-    for key in children {
+    for key in parent.child(which_child) {
         let simplified_child_key = simplify_subtree(tree, *key)?;
         let simplified_child = tree
             .get_node(simplified_child_key)
@@ -142,6 +142,7 @@ fn simplify_composite_children(
             parent,
             simplified_child_key,
             simplified_child,
+            which_child,
             new_left,
             new_right,
             &mut leftovers,
@@ -150,16 +151,18 @@ fn simplify_composite_children(
     Ok(leftovers)
 }
 
+/// If a child can't be flattened, then it is returned in leftovers.
 fn try_flatten_composite_child(
     parent: &CompositeData,
     key: NodeKey,
     child: &Node,
+    which_child: CompositeChild,
     new_left: &mut Vec<NodeKey>,
     new_right: &mut Vec<NodeKey>,
     leftovers: &mut Vec<NodeKey>,
 ) {
+    // Flatten any direct child composite nodes into the parent.
     match child {
-        // Flatten any direct child composite nodes into this one.
         Node::Composite(CompositeData {
             operator: Operator::Add,
             left,
@@ -169,14 +172,25 @@ fn try_flatten_composite_child(
             new_left.append(&mut left.clone());
             new_right.append(&mut right.clone());
         }
-        // Flatten any direct child composite nodes into this one.
         Node::Composite(CompositeData {
             operator: Operator::Multiply,
             left,
+            right,
             ..
-        }) if parent.is_fraction() => {
-            new_left.append(&mut left.clone());
-            // TODO: implement fraction / fraction simplification
+        }) if parent.is_fraction() && which_child == CompositeChild::Left => {
+            // (x / y) / a -> x / (a * y)
+            new_left.append(&mut left.clone()); // x
+            new_right.append(&mut right.clone()); // (a * y)
+        }
+        Node::Composite(CompositeData {
+            operator: Operator::Multiply,
+            left,
+            right,
+            ..
+        }) if parent.is_fraction() && which_child == CompositeChild::Right => {
+            // a / (x / y) -> (a * y) / x
+            new_left.append(&mut right.clone()); // (a * y)
+            new_right.append(&mut left.clone()); // x
         }
         _ => leftovers.push(key),
     }
@@ -212,8 +226,8 @@ fn try_evaluate_composites_as_literals(
     tree: &mut ExpressionTree<Valid>,
     data: CompositeData,
 ) -> Result<NodeKey> {
-    let accumulated_left = accumulate_composite_literals(tree, data.left, data.operator)?;
-    let accumulated_right = accumulate_composite_literals(tree, data.right, data.operator)?;
+    let accumulated_left = accumulate_composite_literals(tree, &data.left, &data.operator)?;
+    let accumulated_right = accumulate_composite_literals(tree, &data.right, &data.operator)?;
 
     let cancelled_left = cancel_composite_terms(tree, &accumulated_left, &accumulated_right)?;
     let cancelled_right = cancel_composite_terms(tree, &accumulated_right, &accumulated_left)?;
@@ -240,7 +254,7 @@ fn try_evaluate_composites_as_literals(
                 tree.add_node(Node::LiteralInteger(data.operator.identity_operand()));
             return Ok(identity_node);
         }
-        ([remaining_key], []) | ([], [remaining_key]) => {
+        ([remaining_key], []) => {
             return Ok(*remaining_key);
         }
         _ => {}
@@ -283,18 +297,18 @@ fn contains_node_of_key(tree: &ExpressionTree<Valid>, nodes: &[&Node], key: &Nod
 
 fn accumulate_composite_literals(
     tree: &mut ExpressionTree<Valid>,
-    keys: Vec<NodeKey>,
-    operator: Operator,
+    keys: &[NodeKey],
+    operator: &Operator,
 ) -> Result<Vec<NodeKey>> {
     let mut sum = operator.identity_operand();
     let mut others = vec![];
     for key in keys {
         let node = tree
-            .get_node(key)
+            .get_node(*key)
             .context("Expected node to exist in tree")?;
         match node {
             Node::LiteralInteger(value) => sum = operator.evaluate(sum, *value),
-            _ => others.push(key),
+            _ => others.push(*key),
         }
     }
     let new_keys = if sum != operator.identity_operand() {
@@ -318,11 +332,11 @@ mod tests {
     fn simplify_expression_returns_expected(expression: &str, expected_simplification: &str) {
         /* Not part of test, only used to simplify parameters by not using tree structs. */
         let expression_tree = convert(expression.to_string()).unwrap();
-        // print!("{}", expression_tree);
+        print!("{}", expression_tree);
         /* End */
 
         let actual_simplification_tree = simplify(expression_tree).unwrap();
-        // print!("{}", actual_simplification_tree);
+        print!("{}", actual_simplification_tree);
 
         /* Not part of test, only used to simplify parameters by not using tree structs. */
         let actual_simplification =
@@ -334,10 +348,7 @@ mod tests {
 
     #[test]
     fn simplify_expression_returns_expected_example() {
-        simplify_expression_returns_expected(
-            "(x + 0)^(10^2 * 100) - 0 * (x + y) / (z - 0)",
-            "x^10000",
-        )
+        simplify_expression_returns_expected("x * (1 / y)", "x / y")
     }
 
     #[parameterized(
@@ -441,6 +452,24 @@ mod tests {
         expression: &str,
         expected_simplification: &str,
     ) {
+        simplify_expression_returns_expected(expression, expected_simplification)
+    }
+
+    #[parameterized(
+    expression = {
+    "x / x",
+    "(y * x) / (x * y)",
+    "y * x / (x * y)",
+    "x * (1 / y)",
+    },
+    expected_simplification = {
+    "1",
+    "1",
+    "1",
+    "x / y",
+    }
+    )]
+    fn simplify_fractions_returns_expected(expression: &str, expected_simplification: &str) {
         simplify_expression_returns_expected(expression, expected_simplification)
     }
 }

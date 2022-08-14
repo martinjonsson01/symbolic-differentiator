@@ -30,6 +30,12 @@ pub struct CompositeData {
     pub(crate) right: Vec<NodeKey>,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum CompositeChild {
+    Left,
+    Right,
+}
+
 impl CompositeData {
     pub fn is_summation(&self) -> bool {
         self.operator == Operator::Add && self.inverse_operator == Operator::Subtract
@@ -37,6 +43,13 @@ impl CompositeData {
 
     pub fn is_fraction(&self) -> bool {
         self.operator == Operator::Multiply && self.inverse_operator == Operator::Divide
+    }
+
+    pub fn child(&self, which: CompositeChild) -> &[NodeKey] {
+        match which {
+            CompositeChild::Left => &self.left,
+            CompositeChild::Right => &self.right,
+        }
     }
 
     fn node_name(&self) -> String {
@@ -434,13 +447,16 @@ impl ExpressionTree<Valid> {
                     tokens.append(&mut multiply_tokens);
                     if let Some(divides_operator) = divides_operator {
                         tokens.push(Token::ForwardSlash);
-                        
+
                         Self::parenthesize_if_precedence(
                             Some(node),
                             divides_operator,
                             tokens,
                             |tokens| tokens.append(&mut divide_tokens),
                         );
+                    } else if !divide_tokens.is_empty() {
+                        tokens.push(Token::ForwardSlash);
+                        tokens.append(&mut divide_tokens);
                     }
                 };
                 Self::parenthesize_if_precedence(
@@ -452,9 +468,7 @@ impl ExpressionTree<Valid> {
 
                 Ok(tokens)
             }
-            Node::Composite(_) => {
-                Err(anyhow!("This composite node has not been implemented yet"))
-            }
+            Node::Composite(_) => Err(anyhow!("This composite node has not been implemented yet")),
             Node::BinaryOperation {
                 operator,
                 left_operand,

@@ -461,13 +461,22 @@ impl ExpressionTree<Valid> {
                     self.build_group_tokens(Some(node), multiply.iter(), Token::Asterisk);
                 let mut divide_tokens =
                     self.build_group_tokens(Some(node), divide.iter(), Token::Asterisk);
-                tokens.append(&mut multiply_tokens);
-                if divide_tokens.len() > 0 {
-                    tokens.push(Token::ForwardSlash);
-                    tokens.push(Token::LeftParentheses);
-                    tokens.append(&mut divide_tokens);
-                    tokens.push(Token::RightParentheses);
-                }
+
+                Self::parenthesize_if_precedence(
+                    parent_node,
+                    Operator::Add,
+                    &mut tokens,
+                    |tokens| {
+                        tokens.append(&mut multiply_tokens);
+                        if divide_tokens.len() > 0 {
+                            tokens.push(Token::ForwardSlash);
+                            tokens.push(Token::LeftParentheses);
+                            tokens.append(&mut divide_tokens);
+                            tokens.push(Token::RightParentheses);
+                        }
+                    },
+                );
+                
                 Ok(tokens)
             }
             Node::Composite(_) => {

@@ -164,7 +164,7 @@ mod interpreter_tests {
             "1",
             "y",
             "y * x^(y - 1)",
-            "3 * 4 * x^3",
+            "12 * x^3",
         }
     )]
     fn differentiate_expression_returns_correct_derivative(

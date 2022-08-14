@@ -1,11 +1,9 @@
-use crate::interpreter::find_matching_node;
 use crate::interpreter::operator::Operator;
 use crate::interpreter::parser::expression_tree::{
     CompositeData, ExpressionTree, Node, NodeKey, Valid,
 };
-use crate::Token;
-use anyhow::{bail, Context, Error, Result};
-use itertools::Itertools;
+
+use anyhow::{bail, Context, Result};
 
 /// Simplifies a given expression tree.
 ///
@@ -347,7 +345,10 @@ mod tests {
 
     #[test]
     fn simplify_expression_returns_expected_example() {
-        simplify_expression_returns_expected("(x + 0)^(10^2 * 100) - 0 * (x + y) / (z - 0)", "x^10000")
+        simplify_expression_returns_expected(
+            "(x + 0)^(10^2 * 100) - 0 * (x + y) / (z - 0)",
+            "x^10000",
+        )
     }
 
     #[parameterized(

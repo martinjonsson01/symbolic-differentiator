@@ -240,10 +240,7 @@ fn try_evaluate_composites_as_literals(
                 tree.add_node(Node::LiteralInteger(data.operator.identity_operand()));
             return Ok(identity_node);
         }
-        ([remaining_key], []) => {
-            return Ok(*remaining_key);
-        }
-        ([], [remaining_key]) => {
+        ([remaining_key], []) | ([], [remaining_key]) => {
             return Ok(*remaining_key);
         }
         _ => {}

@@ -50,6 +50,16 @@ fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Resu
             new_left.append(&mut left_leftovers);
             new_right.append(&mut right_leftovers);
 
+            // 0 * [anything] -> 0
+            if data.is_fraction() {
+                for left_key in &new_left {
+                    let left_node = tree.get_node(*left_key).context("Expected node to be in tree")?;
+                    if let Node::LiteralInteger(0) = left_node {
+                        return Ok(*left_key);
+                    }
+                }
+            }
+
             let new_data = CompositeData {
                 left: new_left,
                 right: new_right,

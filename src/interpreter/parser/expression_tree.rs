@@ -142,6 +142,10 @@ impl Node {
         self.is_literal_integer(1)
     }
 
+    pub fn is_literal(&self) -> bool {
+        matches!(self, Node::Identifier(_))
+    }
+
     pub fn is_literal_integer(&self, compare_to: i32) -> bool {
         match self {
             Node::LiteralInteger(value) => *value == compare_to,

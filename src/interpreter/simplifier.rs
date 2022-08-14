@@ -5,6 +5,7 @@ use crate::interpreter::parser::expression_tree::{
 };
 use crate::Token;
 use anyhow::{bail, Context, Error, Result};
+use itertools::Itertools;
 
 /// Simplifies a given expression tree.
 ///
@@ -49,36 +50,12 @@ fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Resu
             new_left.append(&mut left_leftovers);
             new_right.append(&mut right_leftovers);
 
-            let (filtered_left, filtered_right) = if data.is_summation() {
-                let nonzero_adds = new_left
-                    .iter()
-                    .filter_map(|key| to_nonzero(tree, key))
-                    .collect();
-                let nonzero_subtracts = new_right
-                    .iter()
-                    .filter_map(|key| to_nonzero(tree, key))
-                    .collect();
-                (nonzero_adds, nonzero_subtracts)
-            } else if data.is_fraction() {
-                let adds_without_ones = new_left
-                    .iter()
-                    .filter_map(|key| to_not_one(tree, key))
-                    .collect();
-                let subtracts_without_ones = new_right
-                    .iter()
-                    .filter_map(|key| to_not_one(tree, key))
-                    .collect();
-                (adds_without_ones, subtracts_without_ones)
-            } else {
-                (new_left, new_right)
-            };
-
-            let new_node = tree.add_node(Node::Composite(CompositeData {
-                left: filtered_left,
-                right: filtered_right,
+            let new_data = CompositeData {
+                left: new_left,
+                right: new_right,
                 ..data
-            }));
-            Ok(new_node)
+            };
+            return try_evaluate_composites_as_literals(tree, new_data);
         }
         Some(Node::BinaryOperation {
             operator,
@@ -134,26 +111,51 @@ fn simplify_composite_children(
 ) -> Result<Vec<NodeKey>> {
     let mut leftovers = vec![];
     for key in children {
-        let simplified = simplify_subtree(tree, *key)?;
-        let node = tree
-            .get_node(simplified)
+        let simplified_key = simplify_subtree(tree, *key)?;
+        let simplified_node = tree
+            .get_node(simplified_key)
             .context("Expected node to exist in tree")?;
 
-        match node {
-            // Flatten any direct child composite nodes into this one.
-            Node::Composite(CompositeData {
-                operator: Operator::Add,
-                left,
-                right,
-                ..
-            }) => {
-                new_left.append(&mut left.clone());
-                new_right.append(&mut right.clone());
-            }
-            _ => leftovers.push(*key),
-        }
+        try_flatten_composite_child(
+            new_left,
+            new_right,
+            &mut leftovers,
+            simplified_key,
+            simplified_node,
+        )
     }
     Ok(leftovers)
+}
+
+fn try_flatten_composite_child(
+    new_left: &mut Vec<NodeKey>,
+    new_right: &mut Vec<NodeKey>,
+    leftovers: &mut Vec<NodeKey>,
+    key: NodeKey,
+    node: &Node,
+) {
+    match node {
+        // Flatten any direct child composite nodes into this one.
+        Node::Composite(CompositeData {
+            operator: Operator::Add,
+            left,
+            right,
+            ..
+        }) => {
+            new_left.append(&mut left.clone());
+            new_right.append(&mut right.clone());
+        }
+        // Flatten any direct child composite nodes into this one.
+        Node::Composite(CompositeData {
+            operator: Operator::Multiply,
+            left,
+            ..
+        }) => {
+            new_left.append(&mut left.clone());
+            // TODO: implement fraction / fraction simplification
+        }
+        _ => leftovers.push(key),
+    }
 }
 
 fn try_evaluate_as_literals(
@@ -162,7 +164,7 @@ fn try_evaluate_as_literals(
     operator: &Operator,
     left: NodeKey,
     right: NodeKey,
-) -> Result<NodeKey, Error> {
+) -> Result<NodeKey> {
     match tree.get_node(left) {
         Some(Node::LiteralInteger(left_value)) => {
             match tree.get_node(right) {
@@ -180,6 +182,116 @@ fn try_evaluate_as_literals(
         // x op y -> x op y
         _ => Ok(node),
     }
+}
+
+fn try_evaluate_composites_as_literals(
+    tree: &mut ExpressionTree<Valid>,
+    data: CompositeData,
+) -> Result<NodeKey> {
+    let accumulated_left = accumulate_composite_literals(tree, data.left, data.operator)?;
+    let accumulated_right = accumulate_composite_literals(tree, data.right, data.operator)?;
+
+    let cancelled_left = cancel_composite_terms(tree, &accumulated_left, &accumulated_right)?;
+    let cancelled_right = cancel_composite_terms(tree, &accumulated_right, &accumulated_left)?;
+
+    match (cancelled_left.len(), cancelled_right.len()) {
+        (1, 1) => {
+            let left = tree
+                .get_node(cancelled_left[0])
+                .context("Expected node to exist in tree")?;
+            let right = tree
+                .get_node(cancelled_right[0])
+                .context("Expected node to exist in tree")?;
+
+            if let Node::LiteralInteger(left_value) = left {
+                if let Node::LiteralInteger(right_value) = right {
+                    let evaluation = data.inverse_operator.evaluate(*left_value, *right_value);
+                    let evaluated_node = tree.add_node(Node::LiteralInteger(evaluation));
+                    return Ok(evaluated_node);
+                }
+            }
+        }
+        (0, 0) => {
+            let identity_node =
+                tree.add_node(Node::LiteralInteger(data.operator.identity_operand()));
+            return Ok(identity_node);
+        }
+        (1, 0) | (0, 1) => {
+            let remaining_key = cancelled_right.iter().chain(cancelled_right.iter()).next();
+            if let Some(key) = remaining_key {
+                return Ok(*key);
+            }
+        }
+        _ => {}
+    }
+
+    let new_node = Node::Composite(CompositeData {
+        left: cancelled_left,
+        right: cancelled_right,
+        ..data
+    });
+    Ok(tree.add_node(new_node))
+}
+
+fn cancel_composite_terms(
+    tree: &mut ExpressionTree<Valid>,
+    first: &Vec<NodeKey>,
+    second: &Vec<NodeKey>,
+) -> Result<Vec<NodeKey>> {
+    let second_nodes = second
+        .into_iter()
+        .map(|key| {
+            tree.get_node(*key)
+                .context("Expected node to exist in tree")
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    let cancelled_first = first
+        .into_iter()
+        .filter(|key| contains_node_of_key(tree, &second_nodes, key))
+        .map(|key| *key)
+        .collect();
+
+    Ok(cancelled_first)
+}
+
+fn contains_node_of_key(tree: &ExpressionTree<Valid>, nodes: &Vec<&Node>, key: &NodeKey) -> bool {
+    match tree.get_node(*key) {
+        None => false,
+        Some(node) => !nodes.contains(&node),
+    }
+}
+
+fn accumulate_composite_literals(
+    tree: &mut ExpressionTree<Valid>,
+    keys: Vec<NodeKey>,
+    operator: Operator,
+) -> Result<Vec<NodeKey>> {
+    let mut sum = operator.identity_operand();
+    let mut others = vec![];
+    for key in keys {
+        let node = tree
+            .get_node(key)
+            .context("Expected node to exist in tree")?;
+        match node {
+            Node::LiteralInteger(value) => sum = operator.evaluate(sum, *value),
+            _ => others.push(key),
+        }
+    }
+    let new_keys = if sum != operator.identity_operand() {
+        let left_sum_literal = tree.add_node(Node::new_literal_integer(sum));
+        vec![left_sum_literal]
+            .into_iter()
+            .chain(others.into_iter())
+            .collect()
+    } else {
+        others
+    };
+    Ok(new_keys)
+}
+
+fn to_literal(tree: &ExpressionTree<Valid>, key: &NodeKey) -> Option<NodeKey> {
+    node_matches(tree, key, |node| node.is_literal())
 }
 
 fn to_nonzero(tree: &ExpressionTree<Valid>, key: &NodeKey) -> Option<NodeKey> {
@@ -226,7 +338,7 @@ mod tests {
 
     #[test]
     fn simplify_expression_returns_expected_example() {
-        simplify_expression_returns_expected("x + 0", "x")
+        simplify_expression_returns_expected("1 * 1 * 1 * x", "x")
     }
 
     #[parameterized(

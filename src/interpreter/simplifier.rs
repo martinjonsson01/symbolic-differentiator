@@ -439,7 +439,7 @@ mod tests {
     },
     expected_simplification = {
     "(x + y) * z",
-    "(x * 2)^2 * (z + a)",
+    "(2 * x)^2 * (z + a)",
     "x^10000",
     "x * y",
     "x * y",

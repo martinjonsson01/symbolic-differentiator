@@ -43,17 +43,29 @@ fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Resu
             let mut new_left = vec![];
             let mut new_right = vec![];
 
-            let mut left_leftovers =
-                simplify_composite_children(tree, &data.left, &mut new_left, &mut new_right)?;
-            let mut right_leftovers =
-                simplify_composite_children(tree, &data.right, &mut new_left, &mut new_right)?;
+            let mut left_leftovers = simplify_composite_children(
+                tree,
+                &data,
+                &data.left,
+                &mut new_left,
+                &mut new_right,
+            )?;
+            let mut right_leftovers = simplify_composite_children(
+                tree,
+                &data,
+                &data.right,
+                &mut new_left,
+                &mut new_right,
+            )?;
             new_left.append(&mut left_leftovers);
             new_right.append(&mut right_leftovers);
 
             // 0 * [anything] -> 0
             if data.is_fraction() {
                 for left_key in &new_left {
-                    let left_node = tree.get_node(*left_key).context("Expected node to be in tree")?;
+                    let left_node = tree
+                        .get_node(*left_key)
+                        .context("Expected node to be in tree")?;
                     if let Node::LiteralInteger(0) = left_node {
                         return Ok(*left_key);
                     }
@@ -115,43 +127,46 @@ fn simplify_subtree(mut tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Resu
 
 fn simplify_composite_children(
     tree: &mut ExpressionTree<Valid>,
+    parent: &CompositeData,
     children: &Vec<NodeKey>,
     new_left: &mut Vec<NodeKey>,
     new_right: &mut Vec<NodeKey>,
 ) -> Result<Vec<NodeKey>> {
     let mut leftovers = vec![];
     for key in children {
-        let simplified_key = simplify_subtree(tree, *key)?;
-        let simplified_node = tree
-            .get_node(simplified_key)
+        let simplified_child_key = simplify_subtree(tree, *key)?;
+        let simplified_child = tree
+            .get_node(simplified_child_key)
             .context("Expected node to exist in tree")?;
 
         try_flatten_composite_child(
+            parent,
+            simplified_child_key,
+            simplified_child,
             new_left,
             new_right,
             &mut leftovers,
-            simplified_key,
-            simplified_node,
         )
     }
     Ok(leftovers)
 }
 
 fn try_flatten_composite_child(
+    parent: &CompositeData,
+    key: NodeKey,
+    child: &Node,
     new_left: &mut Vec<NodeKey>,
     new_right: &mut Vec<NodeKey>,
     leftovers: &mut Vec<NodeKey>,
-    key: NodeKey,
-    node: &Node,
 ) {
-    match node {
+    match child {
         // Flatten any direct child composite nodes into this one.
         Node::Composite(CompositeData {
             operator: Operator::Add,
             left,
             right,
             ..
-        }) => {
+        }) if parent.is_summation() => {
             new_left.append(&mut left.clone());
             new_right.append(&mut right.clone());
         }
@@ -160,7 +175,7 @@ fn try_flatten_composite_child(
             operator: Operator::Multiply,
             left,
             ..
-        }) => {
+        }) if parent.is_fraction() => {
             new_left.append(&mut left.clone());
             // TODO: implement fraction / fraction simplification
         }
@@ -323,7 +338,7 @@ mod tests {
 
     #[test]
     fn simplify_expression_returns_expected_example() {
-        simplify_expression_returns_expected("1 * 1 * 1 * x", "x")
+        simplify_expression_returns_expected("(x + y) * (z + a)", "(x + y) * (z + a)")
     }
 
     #[parameterized(

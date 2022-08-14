@@ -300,31 +300,6 @@ fn accumulate_composite_literals(
     Ok(new_keys)
 }
 
-fn to_literal(tree: &ExpressionTree<Valid>, key: &NodeKey) -> Option<NodeKey> {
-    node_matches(tree, key, |node| node.is_literal())
-}
-
-fn to_nonzero(tree: &ExpressionTree<Valid>, key: &NodeKey) -> Option<NodeKey> {
-    node_matches(tree, key, |node| !node.is_zero())
-}
-
-fn to_not_one(tree: &ExpressionTree<Valid>, key: &NodeKey) -> Option<NodeKey> {
-    node_matches(tree, key, |node| !node.is_one())
-}
-
-fn node_matches(
-    tree: &ExpressionTree<Valid>,
-    key: &NodeKey,
-    predicate: impl Fn(&Node) -> bool,
-) -> Option<NodeKey> {
-    if let Some(node) = tree.get_node(*key) {
-        if predicate(node) {
-            return Some(*key);
-        }
-    }
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

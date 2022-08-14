@@ -219,8 +219,8 @@ fn try_evaluate_composites_as_literals(
     let cancelled_left = cancel_composite_terms(tree, &accumulated_left, &accumulated_right)?;
     let cancelled_right = cancel_composite_terms(tree, &accumulated_right, &accumulated_left)?;
 
-    match (cancelled_left.len(), cancelled_right.len()) {
-        (1, 1) => {
+    match (&cancelled_left[..], &cancelled_right[..]) {
+        ([_], [_]) => {
             let left = tree
                 .get_node(cancelled_left[0])
                 .context("Expected node to exist in tree")?;
@@ -236,16 +236,16 @@ fn try_evaluate_composites_as_literals(
                 }
             }
         }
-        (0, 0) => {
+        ([], []) => {
             let identity_node =
                 tree.add_node(Node::LiteralInteger(data.operator.identity_operand()));
             return Ok(identity_node);
         }
-        (1, 0) | (0, 1) => {
-            let remaining_key = cancelled_right.iter().chain(cancelled_right.iter()).next();
-            if let Some(key) = remaining_key {
-                return Ok(*key);
-            }
+        ([remaining_key], []) => {
+            return Ok(*remaining_key);
+        }
+        ([], [remaining_key]) => {
+            return Ok(*remaining_key);
         }
         _ => {}
     }
@@ -327,6 +327,7 @@ mod tests {
         /* End */
 
         let actual_simplification_tree = simplify(expression_tree).unwrap();
+        print!("{}", actual_simplification_tree);
 
         /* Not part of test, only used to simplify parameters by not using tree structs. */
         let actual_simplification =
@@ -338,7 +339,7 @@ mod tests {
 
     #[test]
     fn simplify_expression_returns_expected_example() {
-        simplify_expression_returns_expected("(x + y) * (z + a)", "(x + y) * (z + a)")
+        simplify_expression_returns_expected("(x + y) * (z + 0)", "(x + y) * z")
     }
 
     #[parameterized(

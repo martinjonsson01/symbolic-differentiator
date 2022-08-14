@@ -1,6 +1,7 @@
 use crate::interpreter::operator::Operator;
 use crate::interpreter::token::Token;
 use anyhow::{anyhow, bail, Context, Result};
+use itertools::Itertools;
 use ptree::{write_tree, TreeBuilder};
 use slotmap::{new_key_type, SlotMap};
 use std::fmt;
@@ -33,7 +34,7 @@ impl CompositeData {
     pub fn is_summation(&self) -> bool {
         self.operator == Operator::Add && self.inverse_operator == Operator::Subtract
     }
-    
+
     pub fn is_fraction(&self) -> bool {
         self.operator == Operator::Multiply && self.inverse_operator == Operator::Divide
     }
@@ -45,11 +46,11 @@ impl CompositeData {
             _ => "Unknown".into(),
         }
     }
-    
+
     fn left_node_name(&self) -> String {
         self.operator.to_string()
     }
-    
+
     fn right_node_name(&self) -> String {
         self.inverse_operator.to_string()
     }
@@ -120,7 +121,7 @@ impl Node {
         })
     }
 
-    pub fn is_operator(&self, _check_operator: Operator) -> bool {
+    pub fn is_specific_operator(&self, _check_operator: Operator) -> bool {
         matches!(
             self,
             Node::BinaryOperation {
@@ -128,6 +129,14 @@ impl Node {
                 ..
             }
         )
+    }
+
+    pub fn try_get_operator(&self) -> Option<Operator> {
+        match self {
+            Node::LiteralInteger(_) | Node::Identifier(_) => None,
+            Node::Composite(CompositeData { operator, .. })
+            | Node::BinaryOperation { operator, .. } => Some(*operator),
+        }
     }
 
     pub fn is_value(&self) -> bool {
@@ -456,27 +465,33 @@ impl ExpressionTree<Valid> {
                 right: divide,
                 ..
             }) => {
+                let divides_operator = self.get_child_operator(divide);
                 let mut tokens = Vec::new();
                 let mut multiply_tokens =
                     self.build_group_tokens(Some(node), multiply.iter(), Token::Asterisk);
                 let mut divide_tokens =
                     self.build_group_tokens(Some(node), divide.iter(), Token::Asterisk);
 
+                let build_interior = |tokens: &mut Vec<Token>| {
+                    tokens.append(&mut multiply_tokens);
+                    if let Some(divides_operator) = divides_operator {
+                        tokens.push(Token::ForwardSlash);
+                        
+                        Self::parenthesize_if_precedence(
+                            Some(node),
+                            divides_operator,
+                            tokens,
+                            |tokens| tokens.append(&mut divide_tokens),
+                        );
+                    }
+                };
                 Self::parenthesize_if_precedence(
                     parent_node,
-                    Operator::Add,
+                    Operator::Multiply,
                     &mut tokens,
-                    |tokens| {
-                        tokens.append(&mut multiply_tokens);
-                        if divide_tokens.len() > 0 {
-                            tokens.push(Token::ForwardSlash);
-                            tokens.push(Token::LeftParentheses);
-                            tokens.append(&mut divide_tokens);
-                            tokens.push(Token::RightParentheses);
-                        }
-                    },
+                    build_interior,
                 );
-                
+
                 Ok(tokens)
             }
             Node::Composite(_) => {
@@ -512,6 +527,17 @@ impl ExpressionTree<Valid> {
                 Ok(tokens)
             }
         }
+    }
+
+    /// If there are multiple child operators, it returns the one with highest precedence.
+    fn get_child_operator(&self, children: &Vec<NodeKey>) -> Option<Operator> {
+        children
+            .iter()
+            .filter_map(|key| self.get_node(*key))
+            .filter_map(Node::try_get_operator)
+            .sorted()
+            .rev()
+            .next()
     }
 
     fn parenthesize_if_necessary(
@@ -579,7 +605,7 @@ impl ExpressionTree<Valid> {
                 Node::Identifier(name) => {
                     builder.add_empty_child(format!("{}", name));
                 }
-                Node::Composite (data) => {
+                Node::Composite(data) => {
                     builder.begin_child(data.node_name());
                     if data.left.len() > 0 {
                         builder.begin_child(data.left_node_name().into());
@@ -668,6 +694,16 @@ mod tests {
         let tree = create_complex_tree();
 
         print!("{}", tree);
+    }
+
+    #[test]
+    fn get_child_operator_returns_child_with_highest_precedence() {
+        let tree = create_complex_tree();
+        let children = tree.nodes.clone();
+
+        let operator = tree.get_child_operator(&children.keys().collect::<Vec<NodeKey>>());
+
+        assert_eq!(operator, Some(Operator::Multiply))
     }
 
     #[test]

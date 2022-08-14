@@ -77,9 +77,17 @@ impl PartialEq for Operator {
     }
 }
 
+impl Eq for Operator {}
+
+impl Ord for Operator {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.precedence().cmp(&other.precedence())
+    }
+}
+
 impl PartialOrd for Operator {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.precedence().partial_cmp(&other.precedence())
+        Some(self.cmp(other))
     }
 }
 

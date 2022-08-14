@@ -84,7 +84,7 @@ fn differentiate_subtree(
                 find_matching_node(tree, multiply.iter(), |token| token.is_value())
                     .context("Expected a value child")?;
                 let exponentiate_key = find_matching_node(tree, multiply.iter(), |token| {
-                    token.is_operator(Operator::Exponentiate)
+                    token.is_specific_operator(Operator::Exponentiate)
                 })
                 .context("Expected an exponentiation child")?;
 

@@ -44,6 +44,15 @@ fn differentiate_subtree(
     with_respect_to: &Node,
 ) -> Result<NodeKey> {
     match tree.get_node(node) {
+        Some(Node::LiteralInteger(_)) => Ok(tree.add_node(Node::LiteralInteger(0))),
+        Some(Node::Identifier(variable_name)) => {
+            if with_respect_to.is_identifier(variable_name) {
+                let one_node = tree.add_node(Node::new_literal_integer(1));
+                Ok(one_node)
+            } else {
+                Ok(node)
+            }
+        }
         Some(Node::BinaryOperation {
             operator,
             left_operand,
@@ -81,19 +90,25 @@ fn differentiate_subtree(
             if multiply.len() == 2 && divide.is_empty() {
                 let multiply = multiply.clone();
 
-                find_matching_node(tree, multiply.iter(), |token| token.is_value())
-                    .context("Expected a value child")?;
-                let exponentiate_key = find_matching_node(tree, multiply.iter(), |token| {
-                    token.is_specific_operator(Operator::Exponentiate)
-                })
-                .context("Expected an exponentiation child")?;
+                let maybe_value = find_matching_node(tree, multiply.iter(), |node| {
+                    node.is_value() && node != with_respect_to
+                });
+                let maybe_non_value = find_matching_node(tree, multiply.iter(), |node| {
+                    !node.is_value() || node == with_respect_to
+                });
 
-                let new_root = differentiate_subtree(tree, exponentiate_key, with_respect_to)?;
-                tree.replace_child_of(node, exponentiate_key, new_root)?;
-                Ok(node)
-            } else {
-                Err(anyhow!("Could not differentiate expression"))
+                if let Some(_) = maybe_value {
+                    if let Some(non_value) = maybe_non_value {
+                        let new_root = differentiate_subtree(tree, non_value, with_respect_to)?;
+                        tree.replace_child_of(node, non_value, new_root)?;
+                        return Ok(node);
+                    }
+                    return Err(anyhow!("Could not differentiate expression"));
+                }
             }
+            Err(anyhow!(
+                "Can not currently differentiate product with >2 factors"
+            ))
         }
         Some(Node::Composite(data)) => {
             let data = data.clone();
@@ -117,14 +132,6 @@ fn differentiate_subtree(
                 ..data
             });
             Ok(tree.add_node(new_node))
-        }
-        Some(Node::Identifier(variable_name)) => {
-            if with_respect_to.is_identifier(variable_name) {
-                let one_node = tree.add_node(Node::new_literal_integer(1));
-                Ok(one_node)
-            } else {
-                Ok(node)
-            }
         }
         _ => bail!("The given node is not an operator token in the given expression tree"),
     }

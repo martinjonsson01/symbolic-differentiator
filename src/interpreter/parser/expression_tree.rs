@@ -144,6 +144,10 @@ impl Node {
         )
     }
 
+    pub fn is_operator(&self) -> bool {
+        matches!(self, Node::BinaryOperation { .. }) || matches!(self, Node::Composite { .. })
+    }
+
     pub fn try_get_operator(&self) -> Option<Operator> {
         match self {
             Node::LiteralInteger(_) | Node::Identifier(_) => None,

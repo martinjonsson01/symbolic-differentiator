@@ -177,6 +177,12 @@ mod interpreter_tests {
         assert_eq!(actual_derivative, expected_derivative);
     }
 
+    #[test]
+    fn test() {
+        let actual_derivative = differentiate("x * 5".to_string(), "x".to_string()).unwrap();
+        assert_eq!(actual_derivative, "5".to_string());
+    }
+
     #[parameterized(
     expression = {
     "x",
@@ -191,7 +197,7 @@ mod interpreter_tests {
     },
     expected_derivative = {
     "1",
-    "3",
+    "0",
     "y",
     "1",
     "5",

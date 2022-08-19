@@ -158,6 +158,7 @@ mod interpreter_tests {
             "y",
             "x^y",
             "3 * x^4",
+            "x^3 + 3 * x^12",
         },
         expected_derivative = {
             "3 * x^2",
@@ -165,6 +166,7 @@ mod interpreter_tests {
             "y",
             "y * x^(y - 1)",
             "12 * x^3",
+            "3 * x^2 + 36 * x^11",
         }
     )]
     fn differentiate_expression_returns_correct_derivative(

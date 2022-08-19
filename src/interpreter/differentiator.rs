@@ -95,6 +95,29 @@ fn differentiate_subtree(
                 Err(anyhow!("Could not differentiate expression"))
             }
         }
+        Some(Node::Composite(data)) => {
+            let data = data.clone();
+            let CompositeData {
+                left: adds,
+                right: subtracts,
+                ..
+            } = data;
+            let new_adds: Vec<NodeKey> = adds
+                .into_iter()
+                .filter_map(|key| differentiate_subtree(tree, key, with_respect_to).ok())
+                .collect();
+            let new_subtracts: Vec<NodeKey> = subtracts
+                .into_iter()
+                .filter_map(|key| differentiate_subtree(tree, key, with_respect_to).ok())
+                .collect();
+
+            let new_node = Node::Composite(CompositeData {
+                left: new_adds,
+                right: new_subtracts,
+                ..data
+            });
+            Ok(tree.add_node(new_node))
+        }
         Some(Node::Identifier(variable_name)) => {
             if with_respect_to.is_identifier(variable_name) {
                 let one_node = tree.add_node(Node::new_literal_integer(1));

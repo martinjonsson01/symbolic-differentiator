@@ -152,24 +152,56 @@ mod interpreter_tests {
     }
 
     #[parameterized(
-        expression = {
-            "x^3",
-            "x^1",
-            "y",
-            "x^y",
-            "3 * x^4",
-            "x^3 + 3 * x^12",
-        },
-        expected_derivative = {
-            "3 * x^2",
-            "1",
-            "y",
-            "y * x^(y - 1)",
-            "12 * x^3",
-            "3 * x^2 + 36 * x^11",
-        }
+    expression = {
+    "x^3",
+    "x^1",
+    "y",
+    "x^y",
+    "3 * x^4",
+    "x^3 + 3 * x^12",
+    },
+    expected_derivative = {
+    "3 * x^2",
+    "1",
+    "y",
+    "y * x^(y - 1)",
+    "12 * x^3",
+    "3 * x^2 + 36 * x^11",
+    }
     )]
     fn differentiate_expression_returns_correct_derivative(
+        expression: &str,
+        expected_derivative: &str,
+    ) {
+        let actual_derivative = differentiate(expression.to_string(), "x".to_string()).unwrap();
+        assert_eq!(actual_derivative, expected_derivative);
+    }
+
+    #[parameterized(
+    expression = {
+    "x",
+    "3",
+    "y",
+    "x + 7",
+    "x * 5",
+    "5 * x",
+    "x^3 + 2 * x^2 - 4 * x + 3",
+    "sqrt(x^2 + 2)",
+    "log((1 + x)^3)",
+    },
+    expected_derivative = {
+    "1",
+    "3",
+    "y",
+    "1",
+    "5",
+    "5",
+    "3 * x^2 + 4 * x - 4",
+    "x * (x^2 + 2)^(-1 / 2)",
+    "3 / (1 + x)",
+    }
+    )]
+    fn cs381k_differentiate_expression_returns_correct_derivative(
         expression: &str,
         expected_derivative: &str,
     ) {

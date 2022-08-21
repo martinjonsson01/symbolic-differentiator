@@ -17,6 +17,7 @@ pub struct Valid {
     root_key: NodeKey,
 }
 
+#[derive(Clone)]
 pub struct ExpressionTree<S: Debug> {
     nodes: SlotMap<NodeKey, Node>,
     state: S,
@@ -474,6 +475,11 @@ impl ExpressionTree<Valid> {
                     self.build_group_tokens(Some(node), multiply.iter(), Token::Asterisk);
                 let mut divide_tokens =
                     self.build_group_tokens(Some(node), divide.iter(), Token::Asterisk);
+                
+                // Put a 1 as numerator if it's empty and there's a denominator, for readability.
+                if multiply_tokens.is_empty() && !divide_tokens.is_empty() {
+                    multiply_tokens.push(Token::LiteralInteger(1));
+                }
 
                 let build_interior = |tokens: &mut Vec<Token>| {
                     tokens.append(&mut multiply_tokens);

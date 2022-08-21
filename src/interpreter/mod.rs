@@ -35,8 +35,11 @@ pub fn differentiate(expression: String, with_respect_to: String) -> Result<Stri
     let expression_tree = convert(expression)?;
     let variable = Node::new_identifier(with_respect_to);
     let simplified_expression = simplify(expression_tree)?;
+    print!("{}", simplified_expression);
     let derivative = find_derivative(simplified_expression, &variable)?;
+    print!("{}", derivative);
     let simplified_derivative = simplify(derivative)?;
+    print!("{}", simplified_derivative);
     let derivative_tokens = simplified_derivative.to_infix()?;
     tokens_to_string(derivative_tokens)
 }
@@ -192,7 +195,7 @@ mod interpreter_tests {
     "x * 5",
     "5 * x",
     "x^3 + 2 * x^2 - 4 * x + 3",
-    "sqrt(x^2 + 2)",
+    "sqrt(2 + x^2)",
     "log((1 + x)^3)",
     },
     expected_derivative = {
@@ -203,7 +206,7 @@ mod interpreter_tests {
     "5",
     "5",
     "3 * x^2 + 4 * x - 4",
-    "x * (x^2 + 2)^(-1 / 2)",
+    "x * (2 + x^2)^(-1 / 2)",
     "3 / (1 + x)",
     }
     )]

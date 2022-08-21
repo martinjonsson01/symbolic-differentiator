@@ -3,7 +3,7 @@ use crate::interpreter::operator::{BinaryOperator, UnaryOperator};
 use crate::interpreter::parser::expression_tree::{
     CompositeData, ExpressionTree, Node, NodeKey, Valid,
 };
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Result};
 
 /// Differentiates the given expression tree with respect to the given variable.
 ///
@@ -58,23 +58,24 @@ fn differentiate_subtree(
             left_operand,
             right_operand,
         }) => {
-            let left_child = tree
-                .get_node(*left_operand)
-                .context("Expected a left operand")?;
-
+            let left_key = *left_operand;
             let right_key = *right_operand;
 
             if *operator == BinaryOperator::Exponentiate {
-                if left_child != with_respect_to {
-                    bail!("Can not differentiate with respect to this variable")
-                }
-
+                // f(g(x)), f(x) = x^y -> g'(x) * y * x^(y - 1) chain rule
+                let base = tree.clone_node_of(left_key)?;
                 let exponent = tree.clone_node_of(right_key)?;
-                let multiply_node = Node::new_binary_multiplication(exponent, node);
-                let multiply_key = tree.add_node(multiply_node);
+                let differentiated_base = differentiate_subtree(tree, left_key, with_respect_to)?;
 
                 let subtraction = create_subtract_one(tree, right_key)?;
-                tree.replace_child_of(node, right_key, subtraction)?;
+                let new_exponentiation =
+                    tree.add_node(Node::new_binary_exponentiation(base, subtraction));
+
+                let multiply_node = Node::new_composite_fraction(
+                    vec![differentiated_base, exponent, new_exponentiation],
+                    vec![],
+                );
+                let multiply_key = tree.add_node(multiply_node);
 
                 Ok(multiply_key)
             } else {
@@ -97,7 +98,7 @@ fn differentiate_subtree(
                     !node.is_value() || node == with_respect_to
                 });
 
-                if let Some(_) = maybe_value {
+                if maybe_value.is_some() {
                     if let Some(non_value) = maybe_non_value {
                         let new_root = differentiate_subtree(tree, non_value, with_respect_to)?;
                         tree.replace_child_of(node, non_value, new_root)?;
@@ -144,7 +145,10 @@ fn differentiate_subtree(
                 let differentiated = differentiate_subtree(tree, power, with_respect_to)?;
                 Ok(differentiated)
             } else {
-                unimplemented!("This unary operation has not yet been implemented: {}", operator)
+                unimplemented!(
+                    "This unary operation has not yet been implemented: {}",
+                    operator
+                )
             }
         }
         None => bail!("The given node is not an operator token in the given expression tree"),
@@ -161,6 +165,7 @@ fn create_subtract_one(tree: &mut ExpressionTree<Valid>, from: NodeKey) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::interpreter::simplifier::simplify;
     use crate::interpreter::Token;
 
     #[test]
@@ -177,8 +182,9 @@ mod tests {
         let with_respect_to = Node::new_identifier(variable.to_string());
         let actual_tree = find_derivative(tree, &with_respect_to).unwrap();
 
-        // 2 * x^(2 - 1) (but in postfix notation)
+        // 1 * 2 * x^(2 - 1) (but in postfix notation)
         let expected_tokens = vec![
+            Token::LiteralInteger(1),
             Token::LiteralInteger(2),
             variable.clone(),
             Token::LiteralInteger(2),
@@ -186,10 +192,14 @@ mod tests {
             BinaryOperator::Subtract.token(),
             BinaryOperator::Exponentiate.token(),
             Token::Asterisk,
+            Token::Asterisk,
         ];
         let expected_tree = ExpressionTree::<Valid>::new(expected_tokens).unwrap();
 
-        assert_eq!(actual_tree, expected_tree);
+        assert_eq!(
+            simplify(actual_tree).unwrap(),
+            simplify(expected_tree).unwrap()
+        );
     }
 
     #[test]
@@ -222,7 +232,10 @@ mod tests {
         ];
         let expected_tree = ExpressionTree::<Valid>::new(expected_tokens).unwrap();
 
-        assert_eq!(actual_tree, expected_tree);
+        assert_eq!(
+            simplify(actual_tree).unwrap(),
+            simplify(expected_tree).unwrap()
+        );
     }
 
     #[test]
@@ -255,6 +268,9 @@ mod tests {
         ];
         let expected_tree = ExpressionTree::<Valid>::new(expected_tokens).unwrap();
 
-        assert_eq!(actual_tree, expected_tree);
+        assert_eq!(
+            simplify(actual_tree).unwrap(),
+            simplify(expected_tree).unwrap()
+        );
     }
 }

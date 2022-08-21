@@ -1,5 +1,5 @@
 use crate::interpreter::find_matching_node;
-use crate::interpreter::operator::BinaryOperator;
+use crate::interpreter::operator::{BinaryOperator, UnaryOperator};
 use crate::interpreter::parser::expression_tree::{
     CompositeData, ExpressionTree, Node, NodeKey, Valid,
 };
@@ -134,7 +134,18 @@ fn differentiate_subtree(
             Ok(tree.add_node(new_node))
         }
         Some(Node::UnaryOperation { operator, operand }) => {
-            todo!()
+            let operand = *operand;
+            if *operator == UnaryOperator::PositiveSquareRoot {
+                // Easier to convert sqrt(x) into x^(1/2) and differentiate that.
+                let one = tree.add_node(Node::new_literal_integer(1));
+                let two = tree.add_node(Node::new_literal_integer(2));
+                let one_half = tree.add_node(Node::new_composite_fraction(vec![one], vec![two]));
+                let power = tree.add_node(Node::new_binary_exponentiation(operand, one_half));
+                let differentiated = differentiate_subtree(tree, power, with_respect_to)?;
+                Ok(differentiated)
+            } else {
+                unimplemented!("This unary operation has not yet been implemented: {}", operator)
+            }
         }
         None => bail!("The given node is not an operator token in the given expression tree"),
     }

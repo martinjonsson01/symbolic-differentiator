@@ -118,8 +118,15 @@ fn simplify_subtree(tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Result<N
 
             try_evaluate_as_literals(tree, node, &operator, left_simplified, right_simplified)
         }
-        Some(Node::UnaryOperation { operator, operand }) => {
-            todo!()
+        Some(Node::UnaryOperation { operand, .. }) => {
+            let operand_key = *operand;
+            let operand_simplified = simplify_subtree(tree, operand_key)?;
+
+            if operand_key != operand_simplified {
+                tree.replace_child_of(node, operand_key, operand_simplified)?;
+            }
+            
+            Ok(node)
         }
         None => Err(anyhow!(
             "The given node does not exist in the given expression tree"

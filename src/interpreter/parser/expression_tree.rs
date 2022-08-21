@@ -1,4 +1,4 @@
-use crate::interpreter::operator::Operator;
+use crate::interpreter::operator::{BinaryOperator, UnaryOperator};
 use crate::interpreter::token::Token;
 use anyhow::{anyhow, bail, Context, Result};
 use itertools::Itertools;
@@ -24,8 +24,8 @@ pub struct ExpressionTree<S: Debug> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompositeData {
-    pub(crate) operator: Operator,
-    pub(crate) inverse_operator: Operator,
+    pub(crate) operator: BinaryOperator,
+    pub(crate) inverse_operator: BinaryOperator,
     pub(crate) left: Vec<NodeKey>,
     pub(crate) right: Vec<NodeKey>,
 }
@@ -38,11 +38,11 @@ pub enum CompositeChild {
 
 impl CompositeData {
     pub fn is_summation(&self) -> bool {
-        self.operator == Operator::Add && self.inverse_operator == Operator::Subtract
+        self.operator == BinaryOperator::Add && self.inverse_operator == BinaryOperator::Subtract
     }
 
     pub fn is_fraction(&self) -> bool {
-        self.operator == Operator::Multiply && self.inverse_operator == Operator::Divide
+        self.operator == BinaryOperator::Multiply && self.inverse_operator == BinaryOperator::Divide
     }
 
     pub fn child(&self, which: CompositeChild) -> &[NodeKey] {
@@ -54,8 +54,8 @@ impl CompositeData {
 
     fn node_name(&self) -> String {
         match self.operator {
-            Operator::Add => "Summation".into(),
-            Operator::Multiply => "Fraction".into(),
+            BinaryOperator::Add => "Summation".into(),
+            BinaryOperator::Multiply => "Fraction".into(),
             _ => "Unknown".into(),
         }
     }
@@ -77,9 +77,13 @@ pub enum Node {
     // Non-terminal symbols (non-leaves)
     Composite(CompositeData),
     BinaryOperation {
-        operator: Operator,
+        operator: BinaryOperator,
         left_operand: NodeKey,
         right_operand: NodeKey,
+    },
+    UnaryOperation {
+        operator: UnaryOperator,
+        operand: NodeKey,
     },
 }
 
@@ -110,7 +114,7 @@ impl Node {
 
     pub fn new_binary_exponentiation(left_operand: NodeKey, right_operand: NodeKey) -> Node {
         Node::BinaryOperation {
-            operator: Operator::Exponentiate,
+            operator: BinaryOperator::Exponentiate,
             left_operand,
             right_operand,
         }
@@ -118,8 +122,8 @@ impl Node {
 
     pub fn new_composite_summation(left: Vec<NodeKey>, right: Vec<NodeKey>) -> Node {
         Node::Composite(CompositeData {
-            operator: Operator::Add,
-            inverse_operator: Operator::Subtract,
+            operator: BinaryOperator::Add,
+            inverse_operator: BinaryOperator::Subtract,
             left,
             right,
         })
@@ -127,14 +131,21 @@ impl Node {
 
     pub fn new_composite_fraction(left: Vec<NodeKey>, right: Vec<NodeKey>) -> Node {
         Node::Composite(CompositeData {
-            operator: Operator::Multiply,
-            inverse_operator: Operator::Divide,
+            operator: BinaryOperator::Multiply,
+            inverse_operator: BinaryOperator::Divide,
             left,
             right,
         })
     }
 
-    pub fn is_specific_operator(&self, _check_operator: Operator) -> bool {
+    fn new_sqrt(operand: NodeKey) -> Node {
+        Node::UnaryOperation {
+            operator: UnaryOperator::PositiveSquareRoot,
+            operand,
+        }
+    }
+
+    pub fn is_specific_operator(&self, _check_operator: BinaryOperator) -> bool {
         matches!(
             self,
             Node::BinaryOperation {
@@ -145,12 +156,16 @@ impl Node {
     }
 
     pub fn is_operator(&self) -> bool {
-        matches!(self, Node::BinaryOperation { .. }) || matches!(self, Node::Composite { .. })
+        matches!(self, Node::BinaryOperation { .. })
+            || matches!(self, Node::Composite { .. })
+            || matches!(self, Node::UnaryOperation { .. })
     }
 
-    pub fn try_get_operator(&self) -> Option<Operator> {
+    pub fn try_get_binary_operator(&self) -> Option<BinaryOperator> {
         match self {
-            Node::LiteralInteger(_) | Node::Identifier(_) => None,
+            Node::LiteralInteger(_)
+            | Node::Identifier(_)
+            | Node::UnaryOperation { .. } => None,
             Node::Composite(CompositeData { operator, .. })
             | Node::BinaryOperation { operator, .. } => Some(*operator),
         }
@@ -171,14 +186,6 @@ impl Node {
         match self {
             Node::Identifier(name) => *name == compare_to,
             _ => false,
-        }
-    }
-
-    pub fn get_operator(&self) -> Option<Operator> {
-        match self {
-            Node::LiteralInteger(_) | Node::Identifier(_) => None,
-            Node::Composite(CompositeData { operator, .. }) => Some(*operator),
-            Node::BinaryOperation { operator, .. } => Some(*operator),
         }
     }
 }
@@ -294,6 +301,11 @@ impl<S: Debug> ExpressionTree<S> {
                 Token::Identifier(name) => {
                     operand_keys.push(tree.add_node(Node::new_identifier(name)))
                 }
+                Token::Sqrt => {
+                    let operand = operand_keys.pop().context("Expected an inner expression")?;
+                    let node = Node::new_sqrt(operand);
+                    operand_keys.push(tree.add_node(node));
+                }
                 Token::LeftParentheses | Token::RightParentheses => {
                     bail!("There should not be any parenthesis present in the input")
                 }
@@ -346,6 +358,11 @@ impl ExpressionTree<Valid> {
         self.nodes.get_mut(key)
     }
 
+    pub fn get_node_with_key(&self, key: NodeKey) -> Option<(NodeKey, &Node)> {
+        let node = self.get_node(key)?;
+        Some((key, node))
+    }
+
     pub fn clone_node_of(&mut self, key: NodeKey) -> Result<NodeKey> {
         let node = self.get_node(key).context("Could not find node in tree")?;
         let cloned = node.clone();
@@ -394,6 +411,17 @@ impl ExpressionTree<Valid> {
                 *child_ref = new_child;
                 Ok(())
             }
+            Node::UnaryOperation {
+                ref mut operand, ..
+            } => {
+                let child_ref = if operand == &old_child {
+                    operand
+                } else {
+                    return Err(anyhow!("Old child is not a child of the given node"));
+                };
+                *child_ref = new_child;
+                Ok(())
+            }
         }
     }
 
@@ -409,7 +437,7 @@ impl ExpressionTree<Valid> {
             Node::LiteralInteger(value) => Ok(vec![Token::LiteralInteger(*value)]),
             Node::Identifier(name) => Ok(vec![Token::Identifier(name.to_string())]),
             Node::Composite(CompositeData {
-                operator: Operator::Add,
+                operator: BinaryOperator::Add,
                 left: add,
                 right: subtract,
                 ..
@@ -421,7 +449,7 @@ impl ExpressionTree<Valid> {
 
                 Self::parenthesize_if_precedence(
                     parent_node,
-                    Operator::Add,
+                    BinaryOperator::Add,
                     &mut tokens,
                     |tokens| {
                         tokens.append(&mut add_tokens);
@@ -435,7 +463,7 @@ impl ExpressionTree<Valid> {
                 Ok(tokens)
             }
             Node::Composite(CompositeData {
-                operator: Operator::Multiply,
+                operator: BinaryOperator::Multiply,
                 left: multiply,
                 right: divide,
                 ..
@@ -465,7 +493,7 @@ impl ExpressionTree<Valid> {
                 };
                 Self::parenthesize_if_precedence(
                     parent_node,
-                    Operator::Multiply,
+                    BinaryOperator::Multiply,
                     &mut tokens,
                     build_interior,
                 );
@@ -491,7 +519,7 @@ impl ExpressionTree<Valid> {
 
                 Self::parenthesize_if_precedence(
                     parent_node,
-                    Operator::Multiply,
+                    BinaryOperator::Multiply,
                     &mut tokens,
                     |tokens| {
                         tokens.append(&mut left_tokens);
@@ -502,21 +530,36 @@ impl ExpressionTree<Valid> {
 
                 Ok(tokens)
             }
+            Node::UnaryOperation { operator, operand } => {
+                let mut tokens = Vec::new();
+                let operand_node = self
+                    .get_node(*operand)
+                    .context("Expected an operand to exist")?;
+
+                let mut operand_tokens = self.build_expression(Some(node), operand_node)?;
+
+                tokens.push(operator.token());
+                tokens.push(Token::LeftParentheses);
+                tokens.append(&mut operand_tokens);
+                tokens.push(Token::RightParentheses);
+
+                Ok(tokens)
+            }
         }
     }
 
     /// If there are multiple child operators, it returns the one with highest precedence.
-    fn get_child_operator(&self, children: &[NodeKey]) -> Option<Operator> {
+    fn get_child_operator(&self, children: &[NodeKey]) -> Option<BinaryOperator> {
         children
             .iter()
             .filter_map(|key| self.get_node(*key))
-            .filter_map(Node::try_get_operator)
+            .filter_map(Node::try_get_binary_operator)
             .sorted()
             .rev()
             .next()
     }
 
-    fn parenthesize_if_necessary(
+    fn parenthesize_if(
         tokens: &mut Vec<Token>,
         predicate: impl Fn() -> bool,
         mut build_interior: impl FnMut(&mut Vec<Token>),
@@ -537,13 +580,13 @@ impl ExpressionTree<Valid> {
 
     fn parenthesize_if_precedence(
         parent_node: Option<&Node>,
-        operator: Operator,
+        operator: BinaryOperator,
         tokens: &mut Vec<Token>,
         build_interior: impl FnMut(&mut Vec<Token>),
     ) {
         let predicate = || {
             if let Some(parent) = parent_node {
-                if let Some(parent_operator) = parent.get_operator() {
+                if let Some(parent_operator) = parent.try_get_binary_operator() {
                     // When a child operator has lower precedence, it and its operands needs
                     // to be wrapped in parentheses.
                     if parent_operator > operator {
@@ -554,7 +597,7 @@ impl ExpressionTree<Valid> {
             false
         };
 
-        Self::parenthesize_if_necessary(tokens, predicate, build_interior);
+        Self::parenthesize_if(tokens, predicate, build_interior);
     }
 
     fn build_group_tokens<'a>(
@@ -607,6 +650,11 @@ impl ExpressionTree<Valid> {
                     builder.begin_child(format!("{}", operator));
                     self.write_node(*left_operand, builder);
                     self.write_node(*right_operand, builder);
+                    builder.end_child();
+                }
+                Node::UnaryOperation { operator, operand } => {
+                    builder.begin_child(format!("{}", operator));
+                    self.write_node(*operand, builder);
                     builder.end_child();
                 }
             },
@@ -679,7 +727,7 @@ mod tests {
 
         let operator = tree.get_child_operator(&children.keys().collect::<Vec<NodeKey>>());
 
-        assert_eq!(operator, Some(Operator::Multiply))
+        assert_eq!(operator, Some(BinaryOperator::Multiply))
     }
 
     #[test]

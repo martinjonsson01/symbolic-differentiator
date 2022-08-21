@@ -1,3 +1,5 @@
+#![feature(if_let_guard)]
+
 use crate::interpreter::differentiate;
 use crate::interpreter::differentiator::find_derivative;
 use crate::interpreter::token::Token;

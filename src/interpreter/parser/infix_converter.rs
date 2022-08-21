@@ -1,4 +1,4 @@
-use crate::interpreter::operator::{Associativity, Operator};
+use crate::interpreter::operator::{Associativity, BinaryOperator};
 use anyhow::{anyhow, bail, Context, Result};
 use std::collections::VecDeque;
 
@@ -11,15 +11,16 @@ pub(super) fn infix_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>
     while let Some(token) = tokens.pop_front() {
         match token {
             Token::LiteralInteger(_) | Token::Identifier(_) => output.push(token),
-            Token::LeftParentheses => operators.push_front(token),
+            Token::Sqrt => operators.push_front(token),
             Token::Plus | Token::Dash | Token::Asterisk | Token::ForwardSlash | Token::Caret => {
                 let operator = token_to_operator(&token)?;
                 parse_operator_token(&mut operators, &mut output, &token, operator)?
             }
+            Token::LeftParentheses => operators.push_front(token),
             Token::RightParentheses => {
                 parse_closing_parenthesis_token(&mut operators, &mut output)?
             }
-        };
+        }
     }
 
     transfer_leftover_operators(&mut operators, &mut output)?;
@@ -27,13 +28,14 @@ pub(super) fn infix_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>
     Ok(output)
 }
 
-fn token_to_operator(token: &Token) -> Result<Operator> {
+
+fn token_to_operator(token: &Token) -> Result<BinaryOperator> {
     match token {
-        Token::Plus => Ok(Operator::Add),
-        Token::Dash => Ok(Operator::Subtract),
-        Token::Asterisk => Ok(Operator::Multiply),
-        Token::ForwardSlash => Ok(Operator::Divide),
-        Token::Caret => Ok(Operator::Exponentiate),
+        Token::Plus => Ok(BinaryOperator::Add),
+        Token::Dash => Ok(BinaryOperator::Subtract),
+        Token::Asterisk => Ok(BinaryOperator::Multiply),
+        Token::ForwardSlash => Ok(BinaryOperator::Divide),
+        Token::Caret => Ok(BinaryOperator::Exponentiate),
         _ => Err(anyhow!("Operator not recognized")),
     }
 }
@@ -84,6 +86,15 @@ fn parse_closing_parenthesis_token(
             // Discard the open parenthesis.
         }
     }
+    match operators.front() {
+        Some(Token::Sqrt) => {
+            let function = operators
+                .pop_front()
+                .with_context(|| "No operators left.")?;
+            output.push(function);
+        }
+        _ => {}
+    }
     Ok(())
 }
 
@@ -91,7 +102,7 @@ fn parse_operator_token(
     operators: &mut VecDeque<Token>,
     output: &mut Vec<Token>,
     token: &Token,
-    operator: Operator,
+    operator: BinaryOperator,
 ) -> Result<()> {
     loop {
         match operators.front() {
@@ -180,6 +191,25 @@ mod tests {
             Token::Dash,
         ]
         .to_vec();
+
+        let actual = infix_to_postfix(infix).unwrap();
+
+        assert_eq!(actual, postfix)
+    }
+
+    #[test]
+    fn infix_to_postfix_simple_function_expression() {
+        // sqrt(x)
+        let infix = vec![
+            Token::Sqrt,
+            Token::LeftParentheses,
+            Token::Identifier("x".to_string()),
+            Token::RightParentheses,
+        ];
+        let postfix = vec![
+            Token::Identifier("x".to_string()),
+            Token::Sqrt,
+        ];
 
         let actual = infix_to_postfix(infix).unwrap();
 

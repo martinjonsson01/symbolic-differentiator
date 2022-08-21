@@ -1,4 +1,4 @@
-use crate::interpreter::operator::Operator;
+use crate::interpreter::operator::BinaryOperator;
 use crate::interpreter::parser::expression_tree::{
     CompositeChild, CompositeData, ExpressionTree, Node, NodeKey, Valid,
 };
@@ -93,7 +93,7 @@ fn simplify_subtree(tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Result<N
                 .get_node(right_simplified)
                 .context("Expected a right operand")?;
 
-            if operator == Operator::Exponentiate {
+            if operator == BinaryOperator::Exponentiate {
                 // x^0 -> 1
                 if right_node.is_literal_integer(0) && !left_node.is_literal_integer(0) {
                     let one = tree.add_node(Node::new_literal_integer(1));
@@ -117,6 +117,9 @@ fn simplify_subtree(tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Result<N
             }
 
             try_evaluate_as_literals(tree, node, &operator, left_simplified, right_simplified)
+        }
+        Some(Node::UnaryOperation { operator, operand }) => {
+            todo!()
         }
         None => Err(anyhow!(
             "The given node does not exist in the given expression tree"
@@ -164,7 +167,7 @@ fn try_flatten_composite_child(
     // Flatten any direct child composite nodes into the parent.
     match child {
         Node::Composite(CompositeData {
-            operator: Operator::Add,
+            operator: BinaryOperator::Add,
             left,
             right,
             ..
@@ -173,7 +176,7 @@ fn try_flatten_composite_child(
             new_right.append(&mut right.clone());
         }
         Node::Composite(CompositeData {
-            operator: Operator::Multiply,
+            operator: BinaryOperator::Multiply,
             left,
             right,
             ..
@@ -183,7 +186,7 @@ fn try_flatten_composite_child(
             new_right.append(&mut right.clone()); // (a * y)
         }
         Node::Composite(CompositeData {
-            operator: Operator::Multiply,
+            operator: BinaryOperator::Multiply,
             left,
             right,
             ..
@@ -199,7 +202,7 @@ fn try_flatten_composite_child(
 fn try_evaluate_as_literals(
     tree: &mut ExpressionTree<Valid>,
     node: NodeKey,
-    operator: &Operator,
+    operator: &BinaryOperator,
     left: NodeKey,
     right: NodeKey,
 ) -> Result<NodeKey> {
@@ -298,7 +301,7 @@ fn contains_node_of_key(tree: &ExpressionTree<Valid>, nodes: &[&Node], key: &Nod
 fn accumulate_composite_literals(
     tree: &mut ExpressionTree<Valid>,
     keys: &[NodeKey],
-    operator: &Operator,
+    operator: &BinaryOperator,
 ) -> Result<Vec<NodeKey>> {
     let mut sum = operator.identity_operand();
     let mut others = vec![];

@@ -1,5 +1,5 @@
 use crate::interpreter::find_matching_node;
-use crate::interpreter::operator::Operator;
+use crate::interpreter::operator::BinaryOperator;
 use crate::interpreter::parser::expression_tree::{
     CompositeData, ExpressionTree, Node, NodeKey, Valid,
 };
@@ -64,7 +64,7 @@ fn differentiate_subtree(
 
             let right_key = *right_operand;
 
-            if *operator == Operator::Exponentiate {
+            if *operator == BinaryOperator::Exponentiate {
                 if left_child != with_respect_to {
                     bail!("Can not differentiate with respect to this variable")
                 }
@@ -82,7 +82,7 @@ fn differentiate_subtree(
             }
         }
         Some(Node::Composite(CompositeData {
-            operator: Operator::Multiply,
+            operator: BinaryOperator::Multiply,
             left: multiply,
             right: divide,
             ..
@@ -133,7 +133,10 @@ fn differentiate_subtree(
             });
             Ok(tree.add_node(new_node))
         }
-        _ => bail!("The given node is not an operator token in the given expression tree"),
+        Some(Node::UnaryOperation { operator, operand }) => {
+            todo!()
+        }
+        None => bail!("The given node is not an operator token in the given expression tree"),
     }
 }
 
@@ -156,7 +159,7 @@ mod tests {
         let tokens = vec![
             variable.clone(),
             Token::LiteralInteger(2),
-            Operator::Exponentiate.token(),
+            BinaryOperator::Exponentiate.token(),
         ];
         let tree = ExpressionTree::<Valid>::new(tokens).unwrap();
 
@@ -169,8 +172,8 @@ mod tests {
             variable.clone(),
             Token::LiteralInteger(2),
             Token::LiteralInteger(1),
-            Operator::Subtract.token(),
-            Operator::Exponentiate.token(),
+            BinaryOperator::Subtract.token(),
+            BinaryOperator::Exponentiate.token(),
             Token::Asterisk,
         ];
         let expected_tree = ExpressionTree::<Valid>::new(expected_tokens).unwrap();
@@ -186,7 +189,7 @@ mod tests {
             Token::LiteralInteger(3),
             variable.clone(),
             Token::Identifier("y".to_string()),
-            Operator::Exponentiate.token(),
+            BinaryOperator::Exponentiate.token(),
             Token::Asterisk,
         ];
         let tree = ExpressionTree::<Valid>::new(tokens).unwrap();
@@ -201,8 +204,8 @@ mod tests {
             variable.clone(),
             Token::Identifier("y".to_string()),
             Token::LiteralInteger(1),
-            Operator::Subtract.token(),
-            Operator::Exponentiate.token(),
+            BinaryOperator::Subtract.token(),
+            BinaryOperator::Exponentiate.token(),
             Token::Asterisk,
             Token::Asterisk,
         ];
@@ -218,7 +221,7 @@ mod tests {
         let tokens = vec![
             variable.clone(),
             Token::LiteralInteger(4),
-            Operator::Exponentiate.token(),
+            BinaryOperator::Exponentiate.token(),
             Token::LiteralInteger(3),
             Token::Asterisk,
         ];
@@ -233,8 +236,8 @@ mod tests {
             variable.clone(),
             Token::LiteralInteger(4),
             Token::LiteralInteger(1),
-            Operator::Subtract.token(),
-            Operator::Exponentiate.token(),
+            BinaryOperator::Subtract.token(),
+            BinaryOperator::Exponentiate.token(),
             Token::Asterisk,
             Token::LiteralInteger(3),
             Token::Asterisk,

@@ -15,6 +15,8 @@ pub enum Token {
     Caret,
     LeftParentheses,
     RightParentheses,
+    /* Functions */
+    Sqrt
 }
 
 pub static SYMBOLS: [char; 7] = ['+', '-', '*', '/', '^', '(', ')'];
@@ -31,6 +33,7 @@ impl fmt::Display for Token {
             Token::Caret => write!(f, "^"),
             Token::LeftParentheses => write!(f, "("),
             Token::RightParentheses => write!(f, ")"),
+            Token::Sqrt => write!(f, "sqrt"),
         }
     }
 }
@@ -47,6 +50,7 @@ impl str::FromStr for Token {
             "^" => Ok(Token::Caret),
             "(" => Ok(Token::LeftParentheses),
             ")" => Ok(Token::RightParentheses),
+            "sqrt" => Ok(Token::Sqrt),
             input => Ok(parse_literal_or_identifier(input)),
         }
     }

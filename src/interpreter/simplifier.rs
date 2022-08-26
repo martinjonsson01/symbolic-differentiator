@@ -39,22 +39,20 @@ fn simplify_subtree(tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Result<N
             let mut new_left = vec![];
             let mut new_right = vec![];
 
-            let mut left_leftovers = simplify_composite_children(
+            simplify_composite_children(
                 tree,
                 &data,
                 CompositeChild::Left,
                 &mut new_left,
                 &mut new_right,
             )?;
-            let mut right_leftovers = simplify_composite_children(
+            simplify_composite_children(
                 tree,
                 &data,
                 CompositeChild::Right,
                 &mut new_left,
                 &mut new_right,
             )?;
-            new_left.append(&mut left_leftovers);
-            new_right.append(&mut right_leftovers);
 
             // 0 * [anything] -> 0
             if data.is_fraction() {
@@ -223,7 +221,7 @@ fn simplify_composite_children(
     which_child: CompositeChild,
     new_left: &mut Vec<NodeKey>,
     new_right: &mut Vec<NodeKey>,
-) -> Result<Vec<NodeKey>> {
+) -> Result<()> {
     let mut leftovers = vec![];
     for key in parent.child(which_child) {
         let simplified_child_key = simplify_subtree(tree, *key)?;
@@ -241,7 +239,11 @@ fn simplify_composite_children(
             &mut leftovers,
         )
     }
-    Ok(leftovers)
+    match which_child {
+        CompositeChild::Left => new_left.append(&mut leftovers),
+        CompositeChild::Right => new_right.append(&mut leftovers),
+    }
+    Ok(())
 }
 
 /// If a child can't be flattened, then it is returned in leftovers.

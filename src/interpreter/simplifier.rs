@@ -68,11 +68,16 @@ fn simplify_subtree(tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Result<N
                 }
             }
 
-            let new_data = CompositeData {
-                left: new_left,
-                right: new_right,
-                ..data
+            let new_data = if data.is_summation() {
+                simplify_sum_of_fractions(tree, data, new_left, new_right)?
+            } else {
+                CompositeData {
+                    left: new_left,
+                    right: new_right,
+                    ..data
+                }
             };
+
             try_evaluate_composites_as_literals(tree, new_data)
         }
         Some(Node::BinaryOperation {
@@ -125,12 +130,90 @@ fn simplify_subtree(tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Result<N
             if operand_key != operand_simplified {
                 tree.replace_child_of(node, operand_key, operand_simplified)?;
             }
-            
+
             Ok(node)
         }
         None => Err(anyhow!(
             "The given node does not exist in the given expression tree"
         )),
+    }
+}
+
+fn simplify_sum_of_fractions(
+    tree: &mut ExpressionTree<Valid>,
+    data: CompositeData,
+    new_left: Vec<NodeKey>,
+    new_right: Vec<NodeKey>,
+) -> Result<CompositeData> {
+    // Disjunctive form (fraction + fraction - fraction)
+
+    let left_keyed_fractions = tree.nodes_into_fractions(&new_left)?;
+    let right_keyed_fractions = tree.nodes_into_fractions(&new_right)?;
+    let left_fractions: Vec<&CompositeData> =
+        left_keyed_fractions.iter().map(|(_, data)| data).collect();
+    let right_fractions: Vec<&CompositeData> =
+        right_keyed_fractions.iter().map(|(_, data)| data).collect();
+
+    let common_denominator: Vec<NodeKey> = left_fractions
+        .iter()
+        .chain(right_fractions.iter())
+        .flat_map(|data| data.right.clone())
+        .collect();
+
+    // An empty common denominator means there's no point in extending them to a common
+    // fraction, as it'll just be equal to the original expression once simplified.
+    // E.g. (a * b)/() - (c * d)/() =  (a * b - (c * d)) / ()
+    // but since any multiplication implicitly has an empty denominator, it's actually
+    // = ((a * b)/() - ((c * d)/())) / () which can be simplified to
+    // = (a * b)/() - (c * d)/() and we're back to where we started.
+    if common_denominator.is_empty() {
+        return Ok(CompositeData {
+            left: new_left,
+            right: new_right,
+            ..data
+        });
+    }
+
+    let extend_nominator_of = |data: &&CompositeData| {
+        let numerator_factors = &data.left;
+        let denominator_factors = &data.right;
+        let other_denominators = common_denominator
+            .iter()
+            .filter(|key| !denominator_factors.contains(key));
+
+        // This chaining effectively multiplies
+        // the other denominators into the numerator.
+        let extended_numerator = numerator_factors
+            .iter()
+            .chain(other_denominators)
+            .copied()
+            .collect::<Vec<_>>();
+        Node::new_multiplied(extended_numerator)
+    };
+    let left_extended_nominators = left_fractions
+        .iter()
+        .map(extend_nominator_of)
+        .map(|node| tree.add_node(node))
+        .collect();
+    let right_extended_nominators = right_fractions
+        .iter()
+        .map(extend_nominator_of)
+        .map(|node| tree.add_node(node))
+        .collect();
+
+    let nominator_sum_data =
+        CompositeData::new_summation(left_extended_nominators, right_extended_nominators);
+    let nominator_sum = tree.add_node(Node::Composite(nominator_sum_data.clone()));
+
+    let nominator_sum = simplify_subtree(tree, nominator_sum)?;
+
+    if common_denominator.is_empty() {
+        Ok(nominator_sum_data)
+    } else {
+        Ok(CompositeData::new_fraction(
+            vec![nominator_sum],
+            common_denominator,
+        ))
     }
 }
 
@@ -253,9 +336,14 @@ fn try_evaluate_composites_as_literals(
 
             if let Node::LiteralInteger(left_value) = left {
                 if let Node::LiteralInteger(right_value) = right {
-                    let evaluation = data.inverse_operator.evaluate(*left_value, *right_value);
-                    let evaluated_node = tree.add_node(Node::LiteralInteger(evaluation));
-                    return Ok(evaluated_node);
+                    // Temporary ugly workaround: since support for floating point numbers
+                    // has not been implemented, don't try to divide numbers that don't evenly
+                    // divide into each other.
+                    if !data.is_fraction() || divides_evenly(*left_value, *right_value) {
+                        let evaluation = data.inverse_operator.evaluate(*left_value, *right_value);
+                        let evaluated_node = tree.add_node(Node::LiteralInteger(evaluation));
+                        return Ok(evaluated_node);
+                    }
                 }
             }
         }
@@ -276,6 +364,13 @@ fn try_evaluate_composites_as_literals(
         ..data
     });
     Ok(tree.add_node(new_node))
+}
+
+fn divides_evenly(a: i32, b: i32) -> bool {
+    let a_float = a as f64;
+    let b_float = b as f64;
+    let integer_division = (a / b) as f64;
+    integer_division == a_float / b_float
 }
 
 fn cancel_composite_terms(
@@ -358,7 +453,7 @@ mod tests {
 
     #[test]
     fn simplify_expression_returns_expected_example() {
-        simplify_expression_returns_expected("x * (1 / y)", "x / y")
+        simplify_expression_returns_expected("(y * x) / (x * y)", "1")
     }
 
     #[parameterized(
@@ -480,6 +575,22 @@ mod tests {
     }
     )]
     fn simplify_fractions_returns_expected(expression: &str, expected_simplification: &str) {
+        simplify_expression_returns_expected(expression, expected_simplification)
+    }
+
+    #[parameterized(
+    expression = {
+    "(x / 3) / (y / 2)",
+    "1 / 2 - 1",
+    "1 / 2 + 1 / 2",
+    },
+    expected_simplification = {
+    "2 * x / 3 * y",
+    "-1 / 2",
+    "1",
+    }
+    )]
+    fn fraction_literal_simplifies_to_expected(expression: &str, expected_simplification: &str) {
         simplify_expression_returns_expected(expression, expected_simplification)
     }
 }

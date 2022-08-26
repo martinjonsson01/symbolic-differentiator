@@ -53,6 +53,35 @@ impl CompositeData {
         }
     }
 
+    pub(crate) fn new_summation(adds: Vec<NodeKey>, subtracts: Vec<NodeKey>) -> CompositeData {
+        CompositeData {
+            operator: BinaryOperator::Add,
+            inverse_operator: BinaryOperator::Subtract,
+            left: adds,
+            right: subtracts,
+        }
+    }
+
+    pub(crate) fn new_fraction(
+        numerator: Vec<NodeKey>,
+        denominator: Vec<NodeKey>,
+    ) -> CompositeData {
+        CompositeData {
+            operator: BinaryOperator::Multiply,
+            inverse_operator: BinaryOperator::Divide,
+            left: numerator,
+            right: denominator,
+        }
+    }
+
+    pub(crate) fn new_summed(terms: Vec<NodeKey>) -> CompositeData {
+        Self::new_summation(terms, vec![])
+    }
+
+    pub(crate) fn new_multiplied(factors: Vec<NodeKey>) -> CompositeData {
+        Self::new_fraction(factors, vec![])
+    }
+
     fn node_name(&self) -> String {
         match self.operator {
             BinaryOperator::Add => "Summation".into(),
@@ -122,21 +151,19 @@ impl Node {
     }
 
     pub fn new_composite_summation(left: Vec<NodeKey>, right: Vec<NodeKey>) -> Node {
-        Node::Composite(CompositeData {
-            operator: BinaryOperator::Add,
-            inverse_operator: BinaryOperator::Subtract,
-            left,
-            right,
-        })
+        Node::Composite(CompositeData::new_summation(left, right))
     }
 
     pub fn new_composite_fraction(left: Vec<NodeKey>, right: Vec<NodeKey>) -> Node {
-        Node::Composite(CompositeData {
-            operator: BinaryOperator::Multiply,
-            inverse_operator: BinaryOperator::Divide,
-            left,
-            right,
-        })
+        Node::Composite(CompositeData::new_fraction(left, right))
+    }
+
+    pub fn new_summed(terms: Vec<NodeKey>) -> Node {
+        Node::Composite(CompositeData::new_summed(terms))
+    }
+
+    pub fn new_multiplied(factors: Vec<NodeKey>) -> Node {
+        Node::Composite(CompositeData::new_multiplied(factors))
     }
 
     fn new_sqrt(operand: NodeKey) -> Node {
@@ -164,9 +191,7 @@ impl Node {
 
     pub fn try_get_binary_operator(&self) -> Option<BinaryOperator> {
         match self {
-            Node::LiteralInteger(_)
-            | Node::Identifier(_)
-            | Node::UnaryOperation { .. } => None,
+            Node::LiteralInteger(_) | Node::Identifier(_) | Node::UnaryOperation { .. } => None,
             Node::Composite(CompositeData { operator, .. })
             | Node::BinaryOperation { operator, .. } => Some(*operator),
         }
@@ -371,6 +396,44 @@ impl ExpressionTree<Valid> {
         Ok(cloned_key)
     }
 
+    pub fn remove_node(&mut self, key: NodeKey) -> Option<Node> {
+        self.nodes.remove(key)
+    }
+
+    pub fn nodes_into_fractions(
+        &mut self,
+        keys:&[NodeKey],
+    ) -> Result<Vec<(NodeKey, CompositeData)>> {
+        let nodes: Vec<(NodeKey, Node)> = keys
+            .iter()
+            .copied()
+            .filter_map(|key| self.get_node_with_key(key))
+            .map(|(key, node)| (key, node.clone()))
+            .collect();
+        let mut fractions = vec![];
+        for (key, node) in nodes {
+            match node {
+                Node::LiteralInteger(_)
+                | Node::Identifier(_)
+                | Node::BinaryOperation { .. }
+                | Node::UnaryOperation { .. }
+                | Node::Composite(CompositeData {
+                    operator: BinaryOperator::Add,
+                    ..
+                }) => {
+                    let fraction_data = CompositeData::new_multiplied(vec![key]);
+                    let fraction_key = self.add_node(Node::Composite(fraction_data.clone()));
+                    fractions.push((fraction_key, fraction_data));
+                }
+                Node::Composite(data) if data.is_fraction() => fractions.push((key, data)),
+                Node::Composite(_) => {
+                    return Err(anyhow!("Unable to handle composite of unknown type"))
+                }
+            }
+        }
+        Ok(fractions)
+    }
+
     pub fn replace_child_of(
         &mut self,
         key: NodeKey,
@@ -475,7 +538,7 @@ impl ExpressionTree<Valid> {
                     self.build_group_tokens(Some(node), multiply.iter(), Token::Asterisk);
                 let mut divide_tokens =
                     self.build_group_tokens(Some(node), divide.iter(), Token::Asterisk);
-                
+
                 // Put a 1 as numerator if it's empty and there's a denominator, for readability.
                 if multiply_tokens.is_empty() && !divide_tokens.is_empty() {
                     multiply_tokens.push(Token::LiteralInteger(1));

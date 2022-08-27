@@ -1,6 +1,6 @@
 use crate::interpreter::find_matching_node;
 use crate::interpreter::operator::{BinaryOperator, UnaryOperator};
-use crate::interpreter::parser::expression_tree::{
+use crate::interpreter::syntax::expression_tree::{
     CompositeData, ExpressionTree, Node, NodeKey, Valid,
 };
 use anyhow::{anyhow, bail, Result};

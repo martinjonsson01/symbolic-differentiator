@@ -3,10 +3,11 @@ pub mod lexer;
 mod operator;
 mod parser;
 mod simplifier;
+mod syntax;
 pub mod token;
 
 use crate::find_derivative;
-use crate::interpreter::parser::expression_tree::{ExpressionTree, Node, NodeKey, Valid};
+use syntax::expression_tree::{ExpressionTree, Node, NodeKey, Valid};
 use crate::interpreter::simplifier::simplify;
 use crate::interpreter::token::Token;
 use anyhow::{Context, Result};
@@ -182,7 +183,8 @@ mod interpreter_tests {
 
     #[test]
     fn test() {
-        let actual_derivative = differentiate("ln((1 + x)^3)".to_string(), "x".to_string()).unwrap();
+        let actual_derivative =
+            differentiate("ln((1 + x)^3)".to_string(), "x".to_string()).unwrap();
         assert_eq!(actual_derivative, "3 * (1 + x)^-1".to_string());
     }
 

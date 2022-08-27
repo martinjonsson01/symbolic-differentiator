@@ -1,7 +1,6 @@
-pub mod expression_tree;
 mod infix_converter;
 
-use crate::interpreter::parser::expression_tree::{ExpressionTree, Valid};
+use crate::interpreter::syntax::expression_tree::{ExpressionTree, Valid};
 use crate::interpreter::parser::infix_converter::infix_to_postfix;
 use crate::interpreter::token;
 use crate::interpreter::token::Token;

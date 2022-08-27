@@ -1,5 +1,5 @@
 use crate::interpreter::operator::BinaryOperator;
-use crate::interpreter::parser::expression_tree::{
+use crate::interpreter::syntax::expression_tree::{
     CompositeChild, CompositeData, ExpressionTree, Node, NodeKey, Valid,
 };
 

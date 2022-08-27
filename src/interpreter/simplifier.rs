@@ -54,55 +54,10 @@ fn simplify_subtree(tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Result<N
                 &mut new_right,
             )?;
 
-            if data.is_fraction() {
-                for left_key in &new_left {
-                    let left_node = tree
-                        .get_node(*left_key)
-                        .context("Expected node to be in tree")?;
-                    // 0 * [anything] -> 0
-                    if let Node::LiteralInteger(0) = left_node {
-                        return Ok(*left_key);
-                    }
-
-                    // [expression]^n / [expression]^k -> [expression]^(n-k)
-                    if let Node::BinaryOperation {
-                        operator: BinaryOperator::Exponentiate,
-                        left_operand: base,
-                        right_operand: exponent,
-                    } = left_node.clone()
-                    {
-                        let right_exponentiation = new_right
-                            .iter()
-                            .filter_map(|key| tree.get_node(*key))
-                            .find_map(|node| match node {
-                                Node::BinaryOperation {
-                                    operator: BinaryOperator::Exponentiate,
-                                    left_operand: other_base,
-                                    right_operand: other_exponent,
-                                } => {
-                                    if tree.nodes_eq(*other_base, base) {
-                                        Some(other_exponent)
-                                    } else {
-                                        None
-                                    }
-                                }
-                                _ => None,
-                            });
-
-                        if let Some(other_exponent) = right_exponentiation {
-                            let new_exponent = tree
-                                .add_node(Node::new_binary_subtraction(exponent, *other_exponent));
-                            
-                            let new_exponentiation =
-                                tree.add_node(Node::new_binary_exponentiation(base, new_exponent));
-                            return simplify_subtree(tree, new_exponentiation);
-                        }
-                    }
-                }
-            }
-
             let new_data = if data.is_summation() {
                 simplify_sum_of_fractions(tree, data, new_left, new_right)?
+            } else if data.is_fraction() {
+                simplify_fraction(tree, &new_left, &new_right)?
             } else {
                 CompositeData {
                     left: new_left,
@@ -138,8 +93,7 @@ fn simplify_subtree(tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Result<N
                     return Ok(one);
                 }
                 // x^1 -> x
-                else if right_node.is_literal_integer(1)
-                {
+                else if right_node.is_literal_integer(1) {
                     let base = tree.add_node(left_node.clone());
                     return Ok(base);
                 }
@@ -168,6 +122,80 @@ fn simplify_subtree(tree: &mut ExpressionTree<Valid>, node: NodeKey) -> Result<N
             "The given node does not exist in the given expression tree"
         )),
     }
+}
+
+fn simplify_fraction(
+    tree: &mut ExpressionTree<Valid>,
+    numerator: &[NodeKey],
+    denominator: &[NodeKey],
+) -> Result<CompositeData> {
+    let mut new_numerator = vec![];
+    let mut exclude_from_denominator = vec![];
+
+    for numerator_factor_key in numerator {
+        let numerator_factor_node = tree
+            .get_node(*numerator_factor_key)
+            .context("Expected node to be in tree")?;
+        // 0 * [anything] -> 0
+        if let Node::LiteralInteger(0) = numerator_factor_node {
+            return Ok(CompositeData::new_multiplied(vec![*numerator_factor_key]));
+        }
+
+        // [expression]^n / [expression]^k -> [expression]^(n-k)
+        if let Node::BinaryOperation {
+            operator: BinaryOperator::Exponentiate,
+            left_operand: base,
+            right_operand: exponent,
+        } = numerator_factor_node.clone()
+        {
+            let denominator_nodes: Vec<(_,_)> = denominator
+                .iter()
+                .filter_map(|key| tree.get_node_with_key(*key))
+                .map(|(key, node)| (key, node.clone()))
+                .collect();
+            let matching_exponentiation_in_denominator =
+                denominator_nodes.iter().find_map(|(key, node)| match node {
+                    Node::BinaryOperation {
+                        operator: BinaryOperator::Exponentiate,
+                        left_operand: other_base,
+                        right_operand: other_exponent,
+                    } => {
+                        if tree.nodes_eq(*other_base, base) {
+                            Some((key, other_exponent))
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                });
+
+            if let Some((other_exponentiation, other_exponent)) = matching_exponentiation_in_denominator {
+                let new_exponent =
+                    tree.add_node(Node::new_binary_subtraction(exponent, *other_exponent));
+
+                let new_exponentiation =
+                    tree.add_node(Node::new_binary_exponentiation(base, new_exponent));
+
+                let simplified_exponentiation = simplify_subtree(tree, new_exponentiation)?;
+
+                new_numerator.push(simplified_exponentiation);
+                // Exclude from denominator because it's been merged with the one in the numerator.
+                exclude_from_denominator.push(*other_exponentiation);
+                
+                continue;
+            }
+        } 
+
+        new_numerator.push(*numerator_factor_key)
+    }
+
+    let new_denominator: Vec<_> = denominator
+        .iter()
+        .filter(|factor| !exclude_from_denominator.contains(factor))
+        .copied()
+        .collect();
+
+    Ok(CompositeData::new_fraction(new_numerator, new_denominator))
 }
 
 fn simplify_sum_of_fractions(
@@ -297,7 +325,7 @@ fn try_flatten_composite_child(
             right,
             ..
         }) if parent.is_summation() => {
-            // x + (a - b) -> x + a - b 
+            // x + (a - b) -> x + a - b
             if which_child == CompositeChild::Left {
                 new_left.append(&mut left.clone());
                 new_right.append(&mut right.clone());
@@ -496,7 +524,7 @@ mod tests {
 
     #[test]
     fn simplify_expression_returns_expected_example() {
-        simplify_expression_returns_expected("(x - z + 2 * 3)^z / (x - z + 2 * 3)^(z - 1)", "6 + x - z")
+        simplify_expression_returns_expected("3 * x^2 / x^3", "3 * x^-1")
     }
 
     #[parameterized(
@@ -587,6 +615,8 @@ mod tests {
     "1 * (x + y)",
     "x - (x - 1)",
     "x + (x - 1)",
+    "3 * (1 + x)^(3 - 1) / (1 + x)^3",
+    "3 * x^2 / x^3",
     },
     expected_simplification = {
     "(x + y) * z",
@@ -598,6 +628,8 @@ mod tests {
     "x + y",
     "1",
     "x + x - 1",
+    "3 * (1 + x)^-1",
+    "3 * x^-1",
     }
     )]
     fn simplify_nested_expressions_returns_expected(
@@ -645,15 +677,20 @@ mod tests {
     expression = {
     "(x + y)^3 / (x + y)^2",
     "(x - z + 2 * 3)^z / (x - z + 2 * 3)^(z - 1)",
-    "(x + 1)^(y + z) / (1 + x)^(a - b)"
+    "(x + 1)^(y + z) / (1 + x)^(a - b)",
+    "x^3 * y^4 * z^5 / (x^2 * y^3 * z^4)",
     },
     expected_simplification = {
     "x + y",
     "6 + x - z",
-    "(1 + x)^(y + z + b - a)"
+    "(1 + x)^(y + z + b - a)",
+    "x * y * z",
     }
     )]
-    fn exponentiation_division_subtracts_exponents(expression: &str, expected_simplification: &str) {
+    fn exponentiation_division_subtracts_exponents(
+        expression: &str,
+        expected_simplification: &str,
+    ) {
         simplify_expression_returns_expected(expression, expected_simplification)
     }
 }

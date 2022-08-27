@@ -11,7 +11,7 @@ pub(super) fn infix_to_postfix(original_tokens: Vec<Token>) -> Result<Vec<Token>
     while let Some(token) = tokens.pop_front() {
         match token {
             Token::LiteralInteger(_) | Token::Identifier(_) => output.push(token),
-            Token::Sqrt => operators.push_front(token),
+            Token::Sqrt | Token::Ln => operators.push_front(token),
             Token::Plus | Token::Dash | Token::Asterisk | Token::ForwardSlash | Token::Caret => {
                 let operator = token_to_operator(&token)?;
                 parse_operator_token(&mut operators, &mut output, &token, operator)?
@@ -87,7 +87,7 @@ fn parse_closing_parenthesis_token(
         }
     }
     match operators.front() {
-        Some(Token::Sqrt) => {
+        Some(Token::Sqrt) | Some(Token::Ln) => {
             let function = operators
                 .pop_front()
                 .with_context(|| "No operators left.")?;

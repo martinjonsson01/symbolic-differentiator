@@ -4,6 +4,7 @@ use crate::interpreter::parser::expression_tree::{
     CompositeData, ExpressionTree, Node, NodeKey, Valid,
 };
 use anyhow::{anyhow, bail, Result};
+use std::mem::discriminant;
 
 /// Differentiates the given expression tree with respect to the given variable.
 ///
@@ -136,14 +137,24 @@ fn differentiate_subtree(
         }
         Some(Node::UnaryOperation { operator, operand }) => {
             let operand = *operand;
-            if *operator == UnaryOperator::PositiveSquareRoot {
+            let operator_discriminant = discriminant(operator);
+            if operator_discriminant == discriminant(&UnaryOperator::PositiveSquareRoot) {
                 // Easier to convert sqrt(x) into x^(1/2) and differentiate that.
                 let one = tree.add_node(Node::new_literal_integer(1));
                 let two = tree.add_node(Node::new_literal_integer(2));
                 let one_half = tree.add_node(Node::new_composite_fraction(vec![one], vec![two]));
                 let power = tree.add_node(Node::new_binary_exponentiation(operand, one_half));
-                let differentiated = differentiate_subtree(tree, power, with_respect_to)?;
-                Ok(differentiated)
+                let derivative = differentiate_subtree(tree, power, with_respect_to)?;
+                Ok(derivative)
+            } else if operator_discriminant == discriminant(&UnaryOperator::NaturalLogarithm) {
+                // d/dx ln(f(x)) = f'(x) / f(x)
+                let denominator = tree.clone_node_of(operand)?;
+                let numerator = differentiate_subtree(tree, operand, with_respect_to)?;
+                let derivative = tree.add_node(Node::new_composite_fraction(
+                    vec![numerator],
+                    vec![denominator],
+                ));
+                Ok(derivative)
             } else {
                 unimplemented!(
                     "This unary operation has not yet been implemented: {}",

@@ -182,8 +182,8 @@ mod interpreter_tests {
 
     #[test]
     fn test() {
-        let actual_derivative = differentiate("x * 5".to_string(), "x".to_string()).unwrap();
-        assert_eq!(actual_derivative, "5".to_string());
+        let actual_derivative = differentiate("ln((1 + x)^3)".to_string(), "x".to_string()).unwrap();
+        assert_eq!(actual_derivative, "3 * (1 + x)^-1".to_string());
     }
 
     #[parameterized(
@@ -196,7 +196,7 @@ mod interpreter_tests {
     "5 * x",
     "x^3 + 2 * x^2 - 4 * x + 3",
     "sqrt(2 + x^2)",
-    "log((1 + x)^3)",
+    "ln((1 + x)^3)",
     },
     expected_derivative = {
     "1",
@@ -207,7 +207,7 @@ mod interpreter_tests {
     "5",
     "3 * x^2 + 4 * x - 4",
     "x * (2 + x^2)^(-1 / 2)",
-    "3 / (1 + x)",
+    "3 * (1 + x)^-1",
     }
     )]
     fn cs381k_differentiate_expression_returns_correct_derivative(

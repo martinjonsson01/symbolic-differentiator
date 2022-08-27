@@ -17,30 +17,29 @@ pub enum BinaryOperator {
 #[derive(Debug, Copy, Clone, Eq)]
 pub enum UnaryOperator {
     PositiveSquareRoot,
+    NaturalLogarithm,
 }
 
 impl UnaryOperator {
     pub fn token(&self) -> Token {
         match self {
             UnaryOperator::PositiveSquareRoot => Token::Sqrt,
+            UnaryOperator::NaturalLogarithm => Token::Ln,
         }
     }
 
     fn associativity(&self) -> Associativity {
-        match self {
-            UnaryOperator::PositiveSquareRoot => Associativity::Right,
-        }
+        Associativity::Right
     }
 
     fn precedence(&self) -> u8 {
-        match self {
-            UnaryOperator::PositiveSquareRoot => 3
-        }
+        3
     }
     
     pub fn evaluate(&self, x: i32) -> i32 {
         match self {
-            UnaryOperator::PositiveSquareRoot => f32::sqrt(x as f32) as i32
+            UnaryOperator::PositiveSquareRoot => f32::sqrt(x as f32) as i32,
+            UnaryOperator::NaturalLogarithm => f32::ln(x as f32) as i32,
         }
     }
 }

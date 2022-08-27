@@ -173,6 +173,13 @@ impl Node {
         }
     }
 
+    fn new_natural_log(operand: NodeKey) -> Node {
+        Node::UnaryOperation {
+            operator: UnaryOperator::NaturalLogarithm,
+            operand,
+        }
+    }
+
     pub fn is_specific_operator(&self, _check_operator: BinaryOperator) -> bool {
         matches!(
             self,
@@ -332,6 +339,11 @@ impl<S: Debug> ExpressionTree<S> {
                     let node = Node::new_sqrt(operand);
                     operand_keys.push(tree.add_node(node));
                 }
+                Token::Ln => {
+                    let operand = operand_keys.pop().context("Expected an inner expression")?;
+                    let node = Node::new_natural_log(operand);
+                    operand_keys.push(tree.add_node(node));
+                }
                 Token::LeftParentheses | Token::RightParentheses => {
                     bail!("There should not be any parenthesis present in the input")
                 }
@@ -400,6 +412,10 @@ impl ExpressionTree<Valid> {
         self.nodes.remove(key)
     }
 
+    pub fn nodes_eq(&self, key1: NodeKey, key2: NodeKey) -> bool {
+        node_eq(self, self, key1, key2)
+    }
+    
     pub fn nodes_into_fractions(
         &mut self,
         keys:&[NodeKey],

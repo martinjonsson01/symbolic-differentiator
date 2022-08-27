@@ -196,7 +196,7 @@ impl Node {
             || matches!(self, Node::UnaryOperation { .. })
     }
 
-    pub fn try_get_binary_operator(&self) -> Option<BinaryOperator> {
+    pub fn as_binary_operator(&self) -> Option<BinaryOperator> {
         match self {
             Node::LiteralInteger(_) | Node::Identifier(_) | Node::UnaryOperation { .. } => None,
             Node::Composite(CompositeData { operator, .. })
@@ -638,7 +638,7 @@ impl ExpressionTree<Valid> {
         children
             .iter()
             .filter_map(|key| self.get_node(*key))
-            .filter_map(Node::try_get_binary_operator)
+            .filter_map(Node::as_binary_operator)
             .sorted()
             .rev()
             .next()
@@ -671,7 +671,7 @@ impl ExpressionTree<Valid> {
     ) {
         let predicate = || {
             if let Some(parent) = parent_node {
-                if let Some(parent_operator) = parent.try_get_binary_operator() {
+                if let Some(parent_operator) = parent.as_binary_operator() {
                     // When a child operator has lower precedence, it and its operands needs
                     // to be wrapped in parentheses.
                     if parent_operator > operator {

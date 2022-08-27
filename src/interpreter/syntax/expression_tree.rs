@@ -295,8 +295,6 @@ impl<S: Debug> ExpressionTree<S> {
     }
 
     pub fn set_root(self, new_root: NodeKey) -> ExpressionTree<Valid> {
-        // TODO: implement "root-node" that is always present, with a single child
-        // TODO: being the start of the real tree
         ExpressionTree {
             nodes: self.nodes,
             state: Valid { root_key: new_root },
@@ -564,7 +562,7 @@ impl ExpressionTree<Valid> {
             .iter()
             .filter_map(|key| self.get_node(*key))
             .filter_map(Node::as_binary_operator)
-            .sorted()
+            .sorted_by(|a, b| a.precedence().cmp(&b.precedence()))
             .rev()
             .next()
     }
@@ -599,7 +597,7 @@ impl ExpressionTree<Valid> {
                 if let Some(parent_operator) = parent.as_binary_operator() {
                     // When a child operator has lower precedence, it and its operands needs
                     // to be wrapped in parentheses.
-                    if parent_operator > operator {
+                    if parent_operator.precedence_gt(&operator) {
                         return true;
                     }
                 }

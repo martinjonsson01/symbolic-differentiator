@@ -126,8 +126,8 @@ fn parse_operator_token(
                         bail!("Found non-operator in operator stack")
                     }
                 };
-                if (other_operator <= operator)
-                    && !(other_operator == operator
+                if (other_operator.precedence_le(&operator))
+                    && !(other_operator.precedence_eq(&operator)
                         && operator.associativity() == Associativity::Left)
                 {
                     break;

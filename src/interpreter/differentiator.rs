@@ -1,8 +1,7 @@
 use crate::interpreter::find_matching_node;
 use crate::interpreter::operator::{BinaryOperator, UnaryOperator};
-use crate::interpreter::syntax::expression_tree::{
-    CompositeData, ExpressionTree, Node, NodeKey, Valid,
-};
+use crate::interpreter::syntax::composite::CompositeData;
+use crate::interpreter::syntax::expression_tree::{ExpressionTree, Node, NodeKey, Valid};
 use anyhow::{anyhow, bail, Result};
 use std::mem::discriminant;
 

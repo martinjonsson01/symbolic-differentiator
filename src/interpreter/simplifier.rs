@@ -1,8 +1,7 @@
 use crate::interpreter::operator::BinaryOperator;
-use crate::interpreter::syntax::expression_tree::{
-    CompositeChild, CompositeData, ExpressionTree, Node, NodeKey, Valid,
-};
+use crate::interpreter::syntax::expression_tree::{ExpressionTree, Node, NodeKey, Valid};
 
+use crate::interpreter::syntax::composite::{CompositeChild, CompositeData};
 use anyhow::{anyhow, Context, Result};
 
 /// Simplifies a given expression tree.
@@ -148,7 +147,7 @@ fn simplify_fraction(
             right_operand: exponent,
         } = numerator_factor_node.clone()
         {
-            let denominator_nodes: Vec<(_,_)> = denominator
+            let denominator_nodes: Vec<(_, _)> = denominator
                 .iter()
                 .filter_map(|key| tree.get_node_with_key(*key))
                 .map(|(key, node)| (key, node.clone()))
@@ -169,7 +168,9 @@ fn simplify_fraction(
                     _ => None,
                 });
 
-            if let Some((other_exponentiation, other_exponent)) = matching_exponentiation_in_denominator {
+            if let Some((other_exponentiation, other_exponent)) =
+                matching_exponentiation_in_denominator
+            {
                 let new_exponent =
                     tree.add_node(Node::new_binary_subtraction(exponent, *other_exponent));
 
@@ -181,10 +182,10 @@ fn simplify_fraction(
                 new_numerator.push(simplified_exponentiation);
                 // Exclude from denominator because it's been merged with the one in the numerator.
                 exclude_from_denominator.push(*other_exponentiation);
-                
+
                 continue;
             }
-        } 
+        }
 
         new_numerator.push(*numerator_factor_key)
     }

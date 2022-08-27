@@ -1,4 +1,5 @@
 use crate::interpreter::operator::{BinaryOperator, UnaryOperator};
+use crate::interpreter::syntax::composite::CompositeData;
 use crate::interpreter::token::Token;
 use anyhow::{anyhow, bail, Context, Result};
 use itertools::Itertools;
@@ -21,82 +22,6 @@ pub struct Valid {
 pub struct ExpressionTree<S: Debug> {
     nodes: SlotMap<NodeKey, Node>,
     state: S,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CompositeData {
-    pub(crate) operator: BinaryOperator,
-    pub(crate) inverse_operator: BinaryOperator,
-    pub(crate) left: Vec<NodeKey>,
-    pub(crate) right: Vec<NodeKey>,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum CompositeChild {
-    Left,
-    Right,
-}
-
-impl CompositeData {
-    pub fn is_summation(&self) -> bool {
-        self.operator == BinaryOperator::Add && self.inverse_operator == BinaryOperator::Subtract
-    }
-
-    pub fn is_fraction(&self) -> bool {
-        self.operator == BinaryOperator::Multiply && self.inverse_operator == BinaryOperator::Divide
-    }
-
-    pub fn child(&self, which: CompositeChild) -> &[NodeKey] {
-        match which {
-            CompositeChild::Left => &self.left,
-            CompositeChild::Right => &self.right,
-        }
-    }
-
-    pub(crate) fn new_summation(adds: Vec<NodeKey>, subtracts: Vec<NodeKey>) -> CompositeData {
-        CompositeData {
-            operator: BinaryOperator::Add,
-            inverse_operator: BinaryOperator::Subtract,
-            left: adds,
-            right: subtracts,
-        }
-    }
-
-    pub(crate) fn new_fraction(
-        numerator: Vec<NodeKey>,
-        denominator: Vec<NodeKey>,
-    ) -> CompositeData {
-        CompositeData {
-            operator: BinaryOperator::Multiply,
-            inverse_operator: BinaryOperator::Divide,
-            left: numerator,
-            right: denominator,
-        }
-    }
-
-    pub(crate) fn new_summed(terms: Vec<NodeKey>) -> CompositeData {
-        Self::new_summation(terms, vec![])
-    }
-
-    pub(crate) fn new_multiplied(factors: Vec<NodeKey>) -> CompositeData {
-        Self::new_fraction(factors, vec![])
-    }
-
-    fn node_name(&self) -> String {
-        match self.operator {
-            BinaryOperator::Add => "Summation".into(),
-            BinaryOperator::Multiply => "Fraction".into(),
-            _ => "Unknown".into(),
-        }
-    }
-
-    fn left_node_name(&self) -> String {
-        self.operator.to_string()
-    }
-
-    fn right_node_name(&self) -> String {
-        self.inverse_operator.to_string()
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -415,10 +340,10 @@ impl ExpressionTree<Valid> {
     pub fn nodes_eq(&self, key1: NodeKey, key2: NodeKey) -> bool {
         node_eq(self, self, key1, key2)
     }
-    
+
     pub fn nodes_into_fractions(
         &mut self,
-        keys:&[NodeKey],
+        keys: &[NodeKey],
     ) -> Result<Vec<(NodeKey, CompositeData)>> {
         let nodes: Vec<(NodeKey, Node)> = keys
             .iter()

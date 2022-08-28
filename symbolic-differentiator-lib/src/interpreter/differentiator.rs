@@ -1,8 +1,7 @@
-use crate::interpreter::find_matching_node;
 use crate::interpreter::operator::{BinaryOperator, UnaryOperator};
 use crate::interpreter::syntax::composite::CompositeData;
 use crate::interpreter::syntax::expression_tree::Node;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 use std::mem::discriminant;
 
 /// Differentiates the given expression tree with respect to the given variable.
@@ -77,12 +76,16 @@ pub fn find_derivative(mut node: Node, with_respect_to: &Node) -> Result<Node> {
             if multiply.len() == 2 && divide.is_empty() {
                 let multiply = multiply.clone();
 
-                let maybe_value = find_matching_node(multiply.iter(), |node| {
+                let mut nodes = multiply.iter();
+                let predicate = |node: &Node| {
                     node.is_value() && node != with_respect_to
-                });
-                let maybe_non_value = find_matching_node(multiply.iter(), |node| {
+                };
+                let maybe_value = nodes.find(|&node| predicate(node));
+                let mut nodes = multiply.iter();
+                let predicate = |node: &Node| {
                     !node.is_value() || node == with_respect_to
-                });
+                };
+                let maybe_non_value = nodes.find(|&node| predicate(node));
 
                 if maybe_value.is_some() {
                     if let Some(non_value) = maybe_non_value {
@@ -98,7 +101,7 @@ pub fn find_derivative(mut node: Node, with_respect_to: &Node) -> Result<Node> {
             ))
         }
         Node::Composite(data) => {
-            let data = data.clone();
+            let data = data;
             let CompositeData {
                 left: adds,
                 right: subtracts,

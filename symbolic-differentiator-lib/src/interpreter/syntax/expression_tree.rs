@@ -2,11 +2,11 @@ use crate::interpreter::operator::{BinaryOperator, UnaryOperator};
 use crate::interpreter::syntax::composite::CompositeData;
 use crate::interpreter::token::Token;
 use anyhow::{anyhow, bail, Context, Result};
-use itertools::Itertools;
 use ptree::{write_tree, TreeBuilder};
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
+use itertools::Itertools;
 
 #[derive(Clone, Eq)]
 pub enum Node {
@@ -263,7 +263,7 @@ pub fn new_tree(mut tokens: Vec<Token>) -> Result<Node> {
     Ok(root)
 }
 
-pub fn nodes_into_fractions<'a>(nodes: &[Node]) -> Result<Vec<CompositeData>> {
+pub fn nodes_into_fractions(nodes: &[Node]) -> Result<Vec<CompositeData>> {
     let mut fractions = vec![];
     for node in nodes {
         match node {
@@ -566,9 +566,10 @@ fn build_group_tokens<'a>(
     iterator: impl Iterator<Item = &'a Node>,
     intersperse_with: Token,
 ) -> Vec<Token> {
-    iterator
-        .filter_map(|node| node.build_expression(parent_node).ok())
-        .intersperse(vec![intersperse_with])
+    let built_expressions = iterator
+        .filter_map(|node| node.build_expression(parent_node).ok());
+    // Have to use fully qualified syntax here until 'intersperse' is added into stdlib
+    itertools::Itertools::intersperse(built_expressions, vec![intersperse_with])
         .flatten()
         .collect()
 }

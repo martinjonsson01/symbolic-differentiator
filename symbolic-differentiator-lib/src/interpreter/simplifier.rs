@@ -70,8 +70,8 @@ pub fn simplify(mut node: Node) -> Result<Node> {
             left_operand,
             right_operand,
         } => {
-            let left = *left_operand.clone();
-            let right = *right_operand.clone();
+            let left = *left_operand;
+            let right = *right_operand;
             let left_simplified = simplify(left)?;
             let right_simplified = simplify(right)?;
 
@@ -84,7 +84,7 @@ pub fn simplify(mut node: Node) -> Result<Node> {
                 }
                 // x^1 -> x
                 else if right_simplified.is_literal_integer(1) {
-                    let base = left_simplified.clone();
+                    let base = left_simplified;
                     return Ok(base);
                 }
             }
@@ -289,40 +289,40 @@ fn try_flatten_composite_child(
     match child {
         Node::Composite(CompositeData {
             operator: BinaryOperator::Add,
-            left,
-            right,
+            mut left,
+            mut right,
             ..
         }) if parent.is_summation() => {
             // x + (a - b) -> x + a - b
             if which_child == CompositeChild::Left {
-                new_left.append(&mut left.clone());
-                new_right.append(&mut right.clone());
+                new_left.append(&mut left);
+                new_right.append(&mut right);
             }
             // x - (a - b) -> x - a + b
             else if which_child == CompositeChild::Right {
-                new_left.append(&mut right.clone());
-                new_right.append(&mut left.clone());
+                new_left.append(&mut right);
+                new_right.append(&mut left);
             }
         }
         Node::Composite(CompositeData {
             operator: BinaryOperator::Multiply,
-            left,
-            right,
+            mut left,
+            mut right,
             ..
         }) if parent.is_fraction() && which_child == CompositeChild::Left => {
             // (x / y) / a -> x / (a * y)
-            new_left.append(&mut left.clone()); // x
-            new_right.append(&mut right.clone()); // (a * y)
+            new_left.append(&mut left); // x
+            new_right.append(&mut right); // (a * y)
         }
         Node::Composite(CompositeData {
             operator: BinaryOperator::Multiply,
-            left,
-            right,
+            mut left,
+            mut right,
             ..
         }) if parent.is_fraction() && which_child == CompositeChild::Right => {
             // a / (x / y) -> (a * y) / x
-            new_left.append(&mut right.clone()); // (a * y)
-            new_right.append(&mut left.clone()); // x
+            new_left.append(&mut right); // (a * y)
+            new_right.append(&mut left); // x
         }
         _ => leftovers.push(child),
     }

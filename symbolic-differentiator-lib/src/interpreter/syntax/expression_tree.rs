@@ -1,13 +1,15 @@
 use crate::interpreter::operator::{BinaryOperator, UnaryOperator};
 use crate::interpreter::syntax::composite::CompositeData;
+use crate::interpreter::syntax::syntax_visitor::{
+    walk_binary_operation, walk_composite, walk_unary_operation, SyntaxVisitor,
+};
 use crate::interpreter::token::Token;
 use anyhow::{anyhow, bail, Context, Result};
+use itertools::Itertools;
 use ptree::{write_tree, TreeBuilder};
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
-use itertools::Itertools;
-use crate::interpreter::syntax::syntax_visitor::SyntaxVisitor;
 
 #[derive(Clone, Eq)]
 pub enum Node {
@@ -131,7 +133,7 @@ impl Node {
             _ => false,
         }
     }
-    
+
     /// Calls the correct visitor method for the node variant on the given visitor.
     pub(crate) fn accept(&self, visitor: &mut impl SyntaxVisitor) {
         match self {
@@ -174,7 +176,11 @@ impl Hash for Node {
             Node::LiteralInteger(value) => value.hash(state),
             Node::Identifier(name) => name.hash(state),
             Node::Composite(data) => data.hash(state),
-            Node::BinaryOperation { operator, left_operand, right_operand } => {
+            Node::BinaryOperation {
+                operator,
+                left_operand,
+                right_operand,
+            } => {
                 operator.hash(state);
                 left_operand.hash(state);
                 right_operand.hash(state);
@@ -486,55 +492,14 @@ impl Node {
         }
     }
 
-    fn write_to(&self, builder: &mut TreeBuilder) {
-        match self {
-            Node::LiteralInteger(value) => {
-                builder.add_empty_child(format!("{}", value));
-            }
-            Node::Identifier(name) => {
-                builder.add_empty_child(name.to_string());
-            }
-            Node::Composite(data) => {
-                builder.begin_child(data.node_name());
-                if !data.left.is_empty() {
-                    builder.begin_child(data.left_node_name());
-                    for node in &data.left {
-                        node.write_to(builder)
-                    }
-                    builder.end_child();
-                }
-                if !data.right.is_empty() {
-                    builder.begin_child(data.right_node_name());
-                    for node in &data.right {
-                        node.write_to(builder)
-                    }
-                    builder.end_child();
-                }
-                builder.end_child();
-            }
-            Node::BinaryOperation {
-                operator,
-                left_operand,
-                right_operand,
-            } => {
-                builder.begin_child(format!("{}", operator));
-                left_operand.write_to(builder);
-                right_operand.write_to(builder);
-                builder.end_child();
-            }
-            Node::UnaryOperation { operator, operand } => {
-                builder.begin_child(format!("{}", operator));
-                operand.write_to(builder);
-                builder.end_child();
-            }
-        }
-    }
-
     fn format_tree(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut builder = TreeBuilder::new("expression".into());
-        self.write_to(&mut builder);
+        let mut visitor = TreeBuilderVisitor {
+            builder: TreeBuilder::new("expression".into()),
+        };
+        self.accept(&mut visitor);
+
         let mut buffer: Vec<u8> = Vec::new();
-        match write_tree(&builder.build(), &mut buffer) {
+        match write_tree(&visitor.builder.build(), &mut buffer) {
             Ok(_) => {}
             Err(_) => return Err(fmt::Error),
         }
@@ -543,6 +508,48 @@ impl Node {
             Err(_) => return Err(fmt::Error),
         };
         f.write_str(text)
+    }
+}
+
+struct TreeBuilderVisitor {
+    builder: TreeBuilder,
+}
+
+impl SyntaxVisitor for TreeBuilderVisitor {
+    fn visit_literal_integer(&mut self, value: i32) {
+        self.builder.add_empty_child(format!("{}", value));
+    }
+    fn visit_identifier(&mut self, name: &str) {
+        self.builder.add_empty_child(name.to_string());
+    }
+    fn visit_composite(&mut self, data: &CompositeData) {
+        self.builder.begin_child(data.node_name());
+        if !data.left.is_empty() {
+            self.builder.begin_child(data.left_node_name());
+            data.left.iter().for_each(|node| node.accept(self));
+            self.builder.end_child();
+        }
+        if !data.right.is_empty() {
+            self.builder.begin_child(data.right_node_name());
+            data.right.iter().for_each(|node| node.accept(self));
+            self.builder.end_child();
+        }
+        self.builder.end_child();
+    }
+    fn visit_binary_operation(
+        &mut self,
+        operator: &BinaryOperator,
+        left_operand: &Node,
+        right_operand: &Node,
+    ) {
+        self.builder.begin_child(format!("{}", operator));
+        walk_binary_operation(self, left_operand, right_operand);
+        self.builder.end_child();
+    }
+    fn visit_unary_operation(&mut self, operator: &UnaryOperator, operand: &Node) {
+        self.builder.begin_child(format!("{}", operator));
+        walk_unary_operation(self, operand);
+        self.builder.end_child();
     }
 }
 
@@ -602,8 +609,7 @@ fn build_group_tokens<'a>(
     iterator: impl Iterator<Item = &'a Node>,
     intersperse_with: Token,
 ) -> Vec<Token> {
-    let built_expressions = iterator
-        .filter_map(|node| node.build_expression(parent_node).ok());
+    let built_expressions = iterator.filter_map(|node| node.build_expression(parent_node).ok());
     // Have to use fully qualified syntax here until 'intersperse' is added into stdlib
     itertools::Itertools::intersperse(built_expressions, vec![intersperse_with])
         .flatten()

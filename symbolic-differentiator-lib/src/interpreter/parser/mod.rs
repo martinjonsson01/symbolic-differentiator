@@ -19,8 +19,19 @@ use anyhow::Result;
 /// # Examples
 ///
 /// ```
+/// # use anyhow::Result;
+/// # fn main() -> Result<()> {
+/// use symbolic_differentiator::interpreter::parser::parse;
+/// use symbolic_differentiator::interpreter::token::Token;
+///
+/// let infix_tokens = vec![
+///     Token::Identifier("x".to_string()),
+///     Token::Caret,
+///     Token::LiteralInteger(2),
+/// ];
 /// let tree = parse(infix_tokens)?;
 /// let regenerated_tokens = tree.to_infix();
+/// # Ok::<(), anyhow::Error>(()) }
 /// ```
 pub fn parse(infix_tokens: Vec<Token>) -> Result<Node> {
     let postfix_tokens = infix_to_postfix(infix_tokens)?;

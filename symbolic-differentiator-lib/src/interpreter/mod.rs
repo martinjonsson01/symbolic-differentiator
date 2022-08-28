@@ -1,9 +1,9 @@
 pub mod differentiator;
 pub mod lexer;
 mod operator;
-mod parser;
-mod simplifier;
-mod syntax;
+pub mod parser;
+pub mod simplifier;
+pub mod syntax;
 pub mod token;
 
 use crate::interpreter::differentiator::find_derivative;
@@ -26,13 +26,9 @@ use syntax::expression_tree::Node;
 ///
 /// ```
 /// use symbolic_differentiator::interpreter::differentiate;
-/// 
+///
 /// let expression = "x^2";
 /// let derivative = differentiate(expression.to_string(), "x".to_string());
-/// match derivative {
-///     Ok(result) => print!("{}", derivative),
-///     Err(_) => {}
-/// }
 /// ```
 pub fn differentiate(expression: String, with_respect_to: String) -> Result<String> {
     let expression_tree = convert(expression)?;
@@ -59,10 +55,16 @@ pub fn differentiate(expression: String, with_respect_to: String) -> Result<Stri
 /// # Examples
 ///
 /// ```
+/// use symbolic_differentiator::interpreter::convert;
+/// # use anyhow::Result;
+///
+/// # fn main() -> Result<()> {
+/// let expression = "x^2";
 /// let tree = convert(expression.into())?;
 /// let regenerated_tokens = tree.to_infix();
+/// # Ok::<(), anyhow::Error>(()) }
 /// ```
-fn convert(expression: String) -> Result<Node> {
+pub fn convert(expression: String) -> Result<Node> {
     let tokens = lexer::tokenize(expression)?;
     let expression_tree = parser::parse(tokens)?;
     Ok(expression_tree)
@@ -80,9 +82,18 @@ fn convert(expression: String) -> Result<Node> {
 ///
 /// ```
 /// use symbolic_differentiator::interpreter::tokens_to_string;
-/// 
-/// let pretty_printed_tokens = tokens_to_string(tokens);
+/// use symbolic_differentiator::interpreter::token::Token;
+/// # use anyhow::Result;
+///
+/// # fn main() -> Result<()> {
+/// let tokens = vec![
+///     Token::Identifier("x".to_string()),
+///     Token::LiteralInteger(2),
+///     Token::Caret,
+/// ];
+/// let pretty_printed_tokens = tokens_to_string(tokens)?;
 /// print!("{}", pretty_printed_tokens);
+/// # Ok::<(), anyhow::Error>(()) }
 /// ```
 pub fn tokens_to_string(tokens: Vec<Token>) -> Result<String> {
     let mut builder = Builder::new(tokens.len());

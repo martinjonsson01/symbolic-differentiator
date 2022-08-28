@@ -17,16 +17,21 @@ use std::mem::discriminant;
 /// # Examples
 ///
 /// ```
-/// let variable = Token::Identifier("x".to_string());
-/// let tokens = [
-/// variable,
-/// Token::Identifier("2".to_string()),
-/// Operator::Exponentiate.token(),
-/// ]
-/// .to_vec();
-/// let tree = ExpressionTree::new(tokens).unwrap();
+/// use symbolic_differentiator::interpreter::differentiator::find_derivative;
+/// use symbolic_differentiator::interpreter::syntax::expression_tree;
+/// use symbolic_differentiator::interpreter::syntax::expression_tree::Node;
+/// use symbolic_differentiator::interpreter::token::Token;
 ///
-/// let derived_tree = find_derivative(tree, variable).unwrap();
+/// let variable = Token::Identifier("x".to_string());
+/// let tokens = vec![
+///     variable.clone(),
+///     Token::LiteralInteger(2),
+///     Token::Caret,
+/// ];
+/// let tree = expression_tree::new_tree(tokens).unwrap();
+///
+/// let with_respect_to = Node::new_identifier("x".to_string());
+/// let derived_tree = find_derivative(tree, &with_respect_to).unwrap();
 /// ```
 pub fn find_derivative(mut node: Node, with_respect_to: &Node) -> Result<Node> {
     match node {
@@ -70,9 +75,8 @@ pub fn find_derivative(mut node: Node, with_respect_to: &Node) -> Result<Node> {
             ..
         }) => {
             if multiply.len() == 2 && divide.is_empty() {
-
                 let multiply = multiply.clone();
-                
+
                 let maybe_value = find_matching_node(multiply.iter(), |node| {
                     node.is_value() && node != with_respect_to
                 });

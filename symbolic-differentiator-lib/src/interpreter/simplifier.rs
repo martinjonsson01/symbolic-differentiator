@@ -20,9 +20,16 @@ use itertools::Itertools;
 /// # Examples
 ///
 /// ```
+/// # use anyhow::Result;
+/// # fn main() -> Result<()> {
+/// use symbolic_differentiator::interpreter::convert;
+/// use symbolic_differentiator::interpreter::simplifier::simplify;
+///
+/// let expression = "x^2";
 /// let expression_tree = convert(expression.to_string())?;
 ///
 /// let simplified_tree = simplify(expression_tree)?;
+/// # Ok::<(), anyhow::Error>(()) }
 /// ```
 pub fn simplify(mut node: Node) -> Result<Node> {
     match node {

@@ -7,6 +7,7 @@ use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use itertools::Itertools;
+use crate::interpreter::syntax::syntax_visitor::SyntaxVisitor;
 
 #[derive(Clone, Eq)]
 pub enum Node {
@@ -128,6 +129,41 @@ impl Node {
         match self {
             Node::Identifier(name) => *name == compare_to,
             _ => false,
+        }
+    }
+    
+    /// Calls the correct visitor method for the node variant on the given visitor.
+    pub(crate) fn accept(&self, visitor: &mut impl SyntaxVisitor) {
+        match self {
+            Node::LiteralInteger(value) => visitor.visit_literal_integer(*value),
+            Node::Identifier(name) => visitor.visit_identifier(name),
+            Node::Composite(data) => visitor.visit_composite(data),
+            Node::BinaryOperation {
+                operator,
+                left_operand,
+                right_operand,
+            } => visitor.visit_binary_operation(operator, left_operand, right_operand),
+            Node::UnaryOperation { operator, operand } => {
+                visitor.visit_unary_operation(operator, operand)
+            }
+        }
+    }
+}
+
+impl Display for Node {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.format_tree(f)
+    }
+}
+
+impl Debug for Node {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Node::LiteralInteger(value) => write!(f, "{:?}", value),
+            Node::Identifier(name) => write!(f, "{:?}", name),
+            Node::Composite(data) => write!(f, "{:?}", data.node_name()),
+            Node::BinaryOperation { operator, .. } => write!(f, "{:?}", operator),
+            Node::UnaryOperation { operator, .. } => write!(f, "{:?}", operator),
         }
     }
 }
@@ -572,18 +608,6 @@ fn build_group_tokens<'a>(
     itertools::Itertools::intersperse(built_expressions, vec![intersperse_with])
         .flatten()
         .collect()
-}
-
-impl Display for Node {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.format_tree(f)
-    }
-}
-
-impl Debug for Node {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.format_tree(f)
-    }
 }
 
 #[cfg(test)]

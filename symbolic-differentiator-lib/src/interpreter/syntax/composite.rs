@@ -66,8 +66,8 @@ impl CompositeData {
 
     pub(super) fn node_name(&self) -> String {
         match self.operator {
-            BinaryOperator::Add => "Summation".into(),
-            BinaryOperator::Multiply => "Fraction".into(),
+            _ if self.is_summation() => "Summation".into(),
+            _ if self.is_fraction() => "Fraction".into(),
             _ => "Unknown".into(),
         }
     }

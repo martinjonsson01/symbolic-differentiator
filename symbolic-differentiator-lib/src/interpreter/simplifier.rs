@@ -437,15 +437,16 @@ mod tests {
     use super::*;
     use crate::interpreter::{convert, tokens_to_string};
     use parameterized_macro::parameterized;
+    use crate::debug;
 
     fn simplify_expression_returns_expected(expression: &str, expected_simplification: &str) {
         /* Not part of test, only used to simplify parameters by not using tree structs. */
         let expression_tree = convert(expression.to_string()).unwrap();
-        print!("{}", expression_tree);
+        debug!(&expression_tree);
         /* End */
 
         let actual_simplification_tree = simplify(expression_tree).unwrap();
-        print!("{}", actual_simplification_tree);
+        debug!(&actual_simplification_tree);
 
         /* Not part of test, only used to simplify parameters by not using tree structs. */
         let actual_simplification =

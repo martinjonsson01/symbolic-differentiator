@@ -6,6 +6,7 @@ pub mod simplifier;
 pub mod syntax;
 pub mod token;
 
+use crate::debug;
 use crate::interpreter::differentiator::find_derivative;
 use crate::interpreter::simplifier::simplify;
 use crate::interpreter::token::Token;
@@ -34,11 +35,11 @@ pub fn differentiate(expression: String, with_respect_to: String) -> Result<Stri
     let expression_tree = convert(expression)?;
     let variable = Node::new_identifier(with_respect_to);
     let simplified_expression = simplify(expression_tree)?;
-    print!("{}", simplified_expression);
+    debug!(&simplified_expression);
     let derivative = find_derivative(simplified_expression, &variable)?;
-    print!("{}", derivative);
+    debug!(&derivative);
     let simplified_derivative = simplify(derivative)?;
-    print!("{}", simplified_derivative);
+    debug!(&simplified_derivative);
     let derivative_tokens = simplified_derivative.to_infix()?;
     tokens_to_string(derivative_tokens)
 }
@@ -114,19 +115,16 @@ pub fn tokens_to_string(tokens: Vec<Token>) -> Result<String> {
     builder.string().context("Failed to build token string")
 }
 
-fn find_matching_node<'a, F>(
-    nodes: impl Iterator<Item = &'a Node>,
-    predicate: F,
-) -> Option<&'a Node>
-where
-    F: Fn(&Node) -> bool,
-{
-    for node in nodes {
-        if predicate(node) {
-            return Some(node);
-        }
-    }
-    None
+#[macro_export]
+#[cfg(debug_assertions)]
+macro_rules! debug {
+    ($( $args:expr ),*) => { dbg!( $( $args ),* ); }
+}
+
+#[macro_export]
+#[cfg(not(debug_assertions))]
+macro_rules! debug {
+    ($( $args:expr ),*) => {()}
 }
 
 #[cfg(test)]

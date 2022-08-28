@@ -1,4 +1,4 @@
-use crate::Token;
+use crate::interpreter::token::Token;
 use std::fmt;
 use std::fmt::Formatter;
 

@@ -1,0 +1,17 @@
+[package]
+name = "symbolic-differentiator"
+version = "0.1.0"
+edition = "2021"
+authors = ["Martin Jonsson <martinjonsson01@gmail.com>"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = { version = "~1" }
+ptree = "0.4.0"
+string-builder = "0.2.0"
+itertools = "0.10"
+
+[dev-dependencies]
+pretty_assertions = "1.2.1"
+parameterized-macro = "1.0"

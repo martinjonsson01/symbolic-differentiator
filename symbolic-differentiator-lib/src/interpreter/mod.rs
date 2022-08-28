@@ -6,7 +6,7 @@ mod simplifier;
 mod syntax;
 pub mod token;
 
-use crate::find_derivative;
+use crate::interpreter::differentiator::find_derivative;
 use crate::interpreter::simplifier::simplify;
 use crate::interpreter::token::Token;
 use anyhow::{Context, Result};
@@ -25,6 +25,8 @@ use syntax::expression_tree::Node;
 /// # Examples
 ///
 /// ```
+/// use symbolic_differentiator::interpreter::differentiate;
+/// 
 /// let expression = "x^2";
 /// let derivative = differentiate(expression.to_string(), "x".to_string());
 /// match derivative {
@@ -77,6 +79,8 @@ fn convert(expression: String) -> Result<Node> {
 /// # Examples
 ///
 /// ```
+/// use symbolic_differentiator::interpreter::tokens_to_string;
+/// 
 /// let pretty_printed_tokens = tokens_to_string(tokens);
 /// print!("{}", pretty_printed_tokens);
 /// ```
@@ -99,7 +103,10 @@ pub fn tokens_to_string(tokens: Vec<Token>) -> Result<String> {
     builder.string().context("Failed to build token string")
 }
 
-fn find_matching_node<'a, F>(nodes: impl Iterator<Item = &'a Node>, predicate: F) -> Option<&'a Node>
+fn find_matching_node<'a, F>(
+    nodes: impl Iterator<Item = &'a Node>,
+    predicate: F,
+) -> Option<&'a Node>
 where
     F: Fn(&Node) -> bool,
 {
@@ -224,6 +231,11 @@ mod interpreter_tests {
 
     #[bench]
     fn bench_differentiate_complex_expression(bencher: &mut Bencher) {
-        bencher.iter(|| differentiate("(x^2+z)^(y*z)+(a+b+c^x)-(8*x^2)".to_string(), "x".to_string()));
+        bencher.iter(|| {
+            differentiate(
+                "(x^2+z)^(y*z)+(a+b+c^x)-(8*x^2)".to_string(),
+                "x".to_string(),
+            )
+        });
     }
 }

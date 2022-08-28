@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Run symbolic-differentiator" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --package symbolic-differentiator --bin symbolic-differentiator x" />
+  <configuration default="false" name="Run symbolic-differentiator-cli" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="run --package symbolic-differentiator-cli --bin symbolic-differentiator-cli -- x" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="true" />

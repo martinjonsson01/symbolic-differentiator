@@ -1,16 +1,9 @@
-#![feature(if_let_guard)]
-#![feature(test)]
-
-use crate::interpreter::differentiate;
-use crate::interpreter::differentiator::find_derivative;
-use crate::interpreter::token::Token;
 use anyhow::Result;
 use clap::Parser;
 use log::error;
 use std::io;
 use std::io::BufRead;
-
-mod interpreter;
+use symbolic_differentiator::interpreter::differentiate;
 
 /// Differentiates the given expression with respect to the given variable
 #[derive(Parser, Debug)]

@@ -661,29 +661,25 @@ mod tests {
 
     fn create_simple_postfix_tokens() -> Vec<Token> {
         // x + y (but in postfix notation)
-        let tokens = [
+        vec![
             Token::Identifier("x".to_string()),
             Token::Identifier("y".to_string()),
             Token::Plus,
         ]
-        .to_vec();
-        tokens
     }
 
     fn create_simple_infix_tokens() -> Vec<Token> {
         // x + y
-        let tokens = [
+        vec![
             Token::Identifier("x".to_string()),
             Token::Plus,
             Token::Identifier("y".to_string()),
         ]
-        .to_vec();
-        tokens
     }
 
     fn create_complex_postfix_tokens() -> Vec<Token> {
         // x + ((y + z) * a) (but in postfix notation)
-        [
+        vec![
             Token::Identifier("x".to_string()),
             Token::Identifier("y".to_string()),
             Token::Identifier("z".to_string()),
@@ -692,12 +688,11 @@ mod tests {
             Token::Asterisk,
             Token::Plus,
         ]
-        .to_vec()
     }
 
     fn create_complex_infix_tokens() -> Vec<Token> {
         // x + (y + z) * a
-        [
+        vec![
             Token::Identifier("x".to_string()),
             Token::Plus,
             Token::LeftParentheses,
@@ -708,7 +703,6 @@ mod tests {
             Token::Asterisk,
             Token::Identifier("a".to_string()),
         ]
-        .to_vec()
     }
 
     fn create_complex_tree() -> Node {

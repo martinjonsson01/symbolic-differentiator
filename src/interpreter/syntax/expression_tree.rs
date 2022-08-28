@@ -4,27 +4,11 @@ use crate::interpreter::token::Token;
 use anyhow::{anyhow, bail, Context, Result};
 use itertools::Itertools;
 use ptree::{write_tree, TreeBuilder};
-use slotmap::{new_key_type, SlotMap};
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
+use std::hash::{Hash, Hasher};
 
-new_key_type! { pub struct NodeKey; }
-
-#[derive(Debug)]
-struct Empty {}
-
-#[derive(Debug)]
-pub struct Valid {
-    root_key: NodeKey,
-}
-
-#[derive(Clone)]
-pub struct ExpressionTree<S: Debug> {
-    nodes: SlotMap<NodeKey, Node>,
-    state: S,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, Eq)]
 pub enum Node {
     // Terminal symbols (leaves)
     LiteralInteger(i32),
@@ -33,12 +17,12 @@ pub enum Node {
     Composite(CompositeData),
     BinaryOperation {
         operator: BinaryOperator,
-        left_operand: NodeKey,
-        right_operand: NodeKey,
+        left_operand: Box<Node>,
+        right_operand: Box<Node>,
     },
     UnaryOperation {
         operator: UnaryOperator,
-        operand: NodeKey,
+        operand: Box<Node>,
     },
 }
 
@@ -51,57 +35,57 @@ impl Node {
         Node::Identifier(name)
     }
 
-    pub fn new_binary_addition(left_operand: NodeKey, right_operand: NodeKey) -> Node {
+    pub fn new_binary_addition(left_operand: Node, right_operand: Node) -> Node {
         Self::new_composite_summation(vec![left_operand, right_operand], Vec::new())
     }
 
-    pub fn new_binary_subtraction(left_operand: NodeKey, right_operand: NodeKey) -> Node {
+    pub fn new_binary_subtraction(left_operand: Node, right_operand: Node) -> Node {
         Self::new_composite_summation(vec![left_operand], vec![right_operand])
     }
 
-    pub fn new_binary_multiplication(left_operand: NodeKey, right_operand: NodeKey) -> Node {
+    pub fn new_binary_multiplication(left_operand: Node, right_operand: Node) -> Node {
         Self::new_composite_fraction(vec![left_operand, right_operand], Vec::new())
     }
 
-    pub fn new_binary_division(left_operand: NodeKey, right_operand: NodeKey) -> Node {
+    pub fn new_binary_division(left_operand: Node, right_operand: Node) -> Node {
         Self::new_composite_fraction(vec![left_operand], vec![right_operand])
     }
 
-    pub fn new_binary_exponentiation(left_operand: NodeKey, right_operand: NodeKey) -> Node {
+    pub fn new_binary_exponentiation(left_operand: Node, right_operand: Node) -> Node {
         Node::BinaryOperation {
             operator: BinaryOperator::Exponentiate,
-            left_operand,
-            right_operand,
+            left_operand: Box::new(left_operand),
+            right_operand: Box::new(right_operand),
         }
     }
 
-    pub fn new_composite_summation(left: Vec<NodeKey>, right: Vec<NodeKey>) -> Node {
+    pub fn new_composite_summation(left: Vec<Node>, right: Vec<Node>) -> Node {
         Node::Composite(CompositeData::new_summation(left, right))
     }
 
-    pub fn new_composite_fraction(left: Vec<NodeKey>, right: Vec<NodeKey>) -> Node {
+    pub fn new_composite_fraction(left: Vec<Node>, right: Vec<Node>) -> Node {
         Node::Composite(CompositeData::new_fraction(left, right))
     }
 
-    pub fn new_summed(terms: Vec<NodeKey>) -> Node {
+    pub fn new_summed(terms: Vec<Node>) -> Node {
         Node::Composite(CompositeData::new_summed(terms))
     }
 
-    pub fn new_multiplied(factors: Vec<NodeKey>) -> Node {
+    pub fn new_multiplied(factors: Vec<Node>) -> Node {
         Node::Composite(CompositeData::new_multiplied(factors))
     }
 
-    fn new_sqrt(operand: NodeKey) -> Node {
+    fn new_sqrt(operand: Node) -> Node {
         Node::UnaryOperation {
             operator: UnaryOperator::PositiveSquareRoot,
-            operand,
+            operand: Box::new(operand),
         }
     }
 
-    fn new_natural_log(operand: NodeKey) -> Node {
+    fn new_natural_log(operand: Node) -> Node {
         Node::UnaryOperation {
             operator: UnaryOperator::NaturalLogarithm,
-            operand,
+            operand: Box::new(operand),
         }
     }
 
@@ -148,29 +132,32 @@ impl Node {
     }
 }
 
-impl PartialEq for ExpressionTree<Valid> {
-    fn eq(&self, other: &Self) -> bool {
-        node_eq(self, other, self.root_key(), other.root_key())
+impl Hash for Node {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Node::LiteralInteger(value) => value.hash(state),
+            Node::Identifier(name) => name.hash(state),
+            Node::Composite(data) => data.hash(state),
+            Node::BinaryOperation { operator, left_operand, right_operand } => {
+                operator.hash(state);
+                left_operand.hash(state);
+                right_operand.hash(state);
+            }
+            Node::UnaryOperation { operator, operand } => {
+                operator.hash(state);
+                operand.hash(state);
+            }
+        }
     }
 }
 
-fn node_eq(
-    tree1: &ExpressionTree<Valid>,
-    tree2: &ExpressionTree<Valid>,
-    key1: NodeKey,
-    key2: NodeKey,
-) -> bool {
-    let maybe_node1 = tree1.get_node(key1);
-    let maybe_node2 = tree2.get_node(key2);
-    if maybe_node1.is_none() && maybe_node2.is_none() {
-        return true;
+impl PartialEq for Node {
+    fn eq(&self, other: &Self) -> bool {
+        node_eq(self, other)
     }
-    if maybe_node1.is_none() || maybe_node2.is_none() {
-        return false;
-    }
-    let node1 = maybe_node1.expect("Value should logically exist by now");
-    let node2 = maybe_node2.expect("Value should logically exist by now");
+}
 
+fn node_eq(node1: &Node, node2: &Node) -> bool {
     return match (node1, node2) {
         (Node::LiteralInteger(value1), Node::LiteralInteger(value2)) => value1 == value2,
         (Node::Identifier(name1), Node::Identifier(name2)) => name1 == name2,
@@ -192,8 +179,8 @@ fn node_eq(
             if second1.len() != second2.len() {
                 return false;
             }
-            return nodes_eq(tree1, tree2, first1.iter(), first2.iter())
-                && nodes_eq(tree1, tree2, second1.iter(), second2.iter());
+            return nodes_eq(first1.iter(), first2.iter())
+                && nodes_eq(second1.iter(), second2.iter());
         }
         (
             Node::BinaryOperation {
@@ -211,178 +198,98 @@ fn node_eq(
                 return false;
             }
 
-            node_eq(tree1, tree2, *left_operand1, *left_operand2)
-                && node_eq(tree1, tree2, *right_operand1, *right_operand2)
+            node_eq(left_operand1, left_operand2) && node_eq(right_operand1, right_operand2)
         }
         _ => false, // node1 and node2 are different variants
     };
 }
 
 fn nodes_eq<'a>(
-    tree1: &ExpressionTree<Valid>,
-    tree2: &ExpressionTree<Valid>,
-    keys1: impl Iterator<Item = &'a NodeKey>,
-    keys2: impl Iterator<Item = &'a NodeKey>,
+    nodes1: impl Iterator<Item = &'a Node>,
+    nodes2: impl Iterator<Item = &'a Node>,
 ) -> bool {
-    keys1
-        .zip(keys2)
-        .map(|(key1, key2)| node_eq(tree1, tree2, *key1, *key2))
+    nodes1
+        .zip(nodes2)
+        .map(|(key1, key2)| node_eq(key1, key2))
         .all(|equal| equal)
 }
 
-impl<S: Debug> ExpressionTree<S> {
-    fn empty() -> ExpressionTree<Empty> {
-        ExpressionTree {
-            nodes: SlotMap::with_key(),
-            state: Empty {},
-        }
-    }
+/// Generates an expression tree based off of the given tokens.
+///
+/// # Arguments
+///
+/// * `postfix_tokens`: Tokens, ordered in postfix notation, to convert to an expression tree.
+///
+/// returns: The root of the generated expression tree.
+pub fn new_tree(mut tokens: Vec<Token>) -> Result<Node> {
+    tokens.reverse();
+    let mut operands: Vec<Node> = Vec::new();
 
-    /// Generates an expression tree based off of the given tokens.
-    ///
-    /// # Arguments
-    ///
-    /// * `postfix_tokens`: Tokens, ordered in postfix notation, to convert to an expression tree.
-    ///
-    /// returns: The generated expression tree.
-    pub fn new(mut tokens: Vec<Token>) -> Result<ExpressionTree<Valid>> {
-        let mut tree = Self::empty();
+    while let Some(token) = tokens.pop() {
+        match token {
+            Token::LiteralInteger(value) => operands.push(Node::new_literal_integer(value)),
+            Token::Identifier(name) => operands.push(Node::new_identifier(name)),
+            Token::Sqrt => {
+                let operand = operands.pop().context("Expected an inner expression")?;
+                let node = Node::new_sqrt(operand);
+                operands.push(node);
+            }
+            Token::Ln => {
+                let operand = operands.pop().context("Expected an inner expression")?;
+                let node = Node::new_natural_log(operand);
+                operands.push(node);
+            }
+            Token::LeftParentheses | Token::RightParentheses => {
+                bail!("There should not be any parenthesis present in the input")
+            }
+            _ => {
+                let operand_two = operands.pop().context("Expected a second operand")?;
+                let operand_one = operands.pop().context("Expected a first operand")?;
 
-        tokens.reverse();
-        let mut operand_keys: Vec<NodeKey> = Vec::new();
-
-        while let Some(token) = tokens.pop() {
-            match token {
-                Token::LiteralInteger(value) => {
-                    operand_keys.push(tree.add_node(Node::new_literal_integer(value)))
-                }
-                Token::Identifier(name) => {
-                    operand_keys.push(tree.add_node(Node::new_identifier(name)))
-                }
-                Token::Sqrt => {
-                    let operand = operand_keys.pop().context("Expected an inner expression")?;
-                    let node = Node::new_sqrt(operand);
-                    operand_keys.push(tree.add_node(node));
-                }
-                Token::Ln => {
-                    let operand = operand_keys.pop().context("Expected an inner expression")?;
-                    let node = Node::new_natural_log(operand);
-                    operand_keys.push(tree.add_node(node));
-                }
-                Token::LeftParentheses | Token::RightParentheses => {
-                    bail!("There should not be any parenthesis present in the input")
-                }
-                _ => {
-                    let operand_two = operand_keys.pop().context("Expected a second operand")?;
-                    let operand_one = operand_keys.pop().context("Expected a first operand")?;
-
-                    let node = match token {
-                        Token::Plus => Node::new_binary_addition(operand_one, operand_two),
-                        Token::Dash => Node::new_binary_subtraction(operand_one, operand_two),
-                        Token::Asterisk => Node::new_binary_multiplication(operand_one, operand_two),
-                        Token::ForwardSlash => Node::new_binary_division(operand_one, operand_two),
-                        Token::Caret => Node::new_binary_exponentiation(operand_one, operand_two),
-                        _ => bail!("Should be unreachable. If this occurs, check the other match-expression above.")
-                    };
-                    operand_keys.push(tree.add_node(node));
-                }
+                let node = match token {
+                    Token::Plus => Node::new_binary_addition(operand_one, operand_two),
+                    Token::Dash => Node::new_binary_subtraction(operand_one, operand_two),
+                    Token::Asterisk => Node::new_binary_multiplication(operand_one, operand_two),
+                    Token::ForwardSlash => Node::new_binary_division(operand_one, operand_two),
+                    Token::Caret => Node::new_binary_exponentiation(operand_one, operand_two),
+                    _ => bail!("Should be unreachable. If this occurs, check the other match-expression above.")
+                };
+                operands.push(node);
             }
         }
-
-        let root_key = operand_keys.pop().context("No tree root found")?;
-        let valid_tree = tree.set_root(root_key);
-        Ok(valid_tree)
     }
 
-    pub fn set_root(self, new_root: NodeKey) -> ExpressionTree<Valid> {
-        ExpressionTree {
-            nodes: self.nodes,
-            state: Valid { root_key: new_root },
-        }
-    }
-
-    pub fn add_node(&mut self, node: Node) -> NodeKey {
-        self.nodes.insert(node)
-    }
+    let root = operands.pop().context("No tree root found")?;
+    Ok(root)
 }
 
-impl ExpressionTree<Valid> {
-    pub fn root_key(&self) -> NodeKey {
-        self.state.root_key
-    }
-
-    pub fn get_node(&self, key: NodeKey) -> Option<&Node> {
-        self.nodes.get(key)
-    }
-
-    pub fn get_mut_node(&mut self, key: NodeKey) -> Option<&mut Node> {
-        self.nodes.get_mut(key)
-    }
-
-    pub fn get_node_with_key(&self, key: NodeKey) -> Option<(NodeKey, &Node)> {
-        let node = self.get_node(key)?;
-        Some((key, node))
-    }
-
-    pub fn clone_node_of(&mut self, key: NodeKey) -> Result<NodeKey> {
-        let node = self.get_node(key).context("Could not find node in tree")?;
-        let cloned = node.clone();
-        let cloned_key = self.nodes.insert(cloned);
-        Ok(cloned_key)
-    }
-
-    pub fn remove_node(&mut self, key: NodeKey) -> Option<Node> {
-        self.nodes.remove(key)
-    }
-
-    pub fn nodes_eq(&self, key1: NodeKey, key2: NodeKey) -> bool {
-        node_eq(self, self, key1, key2)
-    }
-
-    pub fn nodes_into_fractions(
-        &mut self,
-        keys: &[NodeKey],
-    ) -> Result<Vec<(NodeKey, CompositeData)>> {
-        let nodes: Vec<(NodeKey, Node)> = keys
-            .iter()
-            .copied()
-            .filter_map(|key| self.get_node_with_key(key))
-            .map(|(key, node)| (key, node.clone()))
-            .collect();
-        let mut fractions = vec![];
-        for (key, node) in nodes {
-            match node {
-                Node::LiteralInteger(_)
-                | Node::Identifier(_)
-                | Node::BinaryOperation { .. }
-                | Node::UnaryOperation { .. }
-                | Node::Composite(CompositeData {
-                    operator: BinaryOperator::Add,
-                    ..
-                }) => {
-                    let fraction_data = CompositeData::new_multiplied(vec![key]);
-                    let fraction_key = self.add_node(Node::Composite(fraction_data.clone()));
-                    fractions.push((fraction_key, fraction_data));
-                }
-                Node::Composite(data) if data.is_fraction() => fractions.push((key, data)),
-                Node::Composite(_) => {
-                    return Err(anyhow!("Unable to handle composite of unknown type"))
-                }
+pub fn nodes_into_fractions<'a>(nodes: &[Node]) -> Result<Vec<CompositeData>> {
+    let mut fractions = vec![];
+    for node in nodes {
+        match node {
+            Node::LiteralInteger(_)
+            | Node::Identifier(_)
+            | Node::BinaryOperation { .. }
+            | Node::UnaryOperation { .. }
+            | Node::Composite(CompositeData {
+                operator: BinaryOperator::Add,
+                ..
+            }) => {
+                let fraction_data = CompositeData::new_multiplied(vec![node.clone()]);
+                fractions.push(fraction_data);
+            }
+            Node::Composite(data) if data.is_fraction() => fractions.push(data.clone()),
+            Node::Composite(_) => {
+                return Err(anyhow!("Unable to handle composite of unknown type"))
             }
         }
-        Ok(fractions)
     }
+    Ok(fractions)
+}
 
-    pub fn replace_child_of(
-        &mut self,
-        key: NodeKey,
-        old_child: NodeKey,
-        new_child: NodeKey,
-    ) -> Result<()> {
-        let node = self
-            .get_mut_node(key)
-            .context("Expected node to exist in tree")?;
-        match node {
+impl Node {
+    pub fn replace_child(&mut self, old_child: &Node, new_child: Node) -> Result<()> {
+        match self {
             Node::LiteralInteger(_) | Node::Identifier(_) => {
                 Err(anyhow!("Value nodes do not have children"))
             }
@@ -394,7 +301,7 @@ impl ExpressionTree<Valid> {
                 let child_ref = left
                     .iter_mut()
                     .chain(right.iter_mut())
-                    .find(|key| **key == old_child)
+                    .find(|node| *node == old_child)
                     .context("Could not find child of node")?;
                 *child_ref = new_child;
                 Ok(())
@@ -404,39 +311,36 @@ impl ExpressionTree<Valid> {
                 ref mut right_operand,
                 ..
             } => {
-                let child_ref = if left_operand == &old_child {
+                let child_ref = if **left_operand == *old_child {
                     left_operand
-                } else if right_operand == &old_child {
+                } else if **right_operand == *old_child {
                     right_operand
                 } else {
                     return Err(anyhow!("Old child is not a child of the given node"));
                 };
-                *child_ref = new_child;
+                *child_ref = Box::new(new_child);
                 Ok(())
             }
             Node::UnaryOperation {
                 ref mut operand, ..
             } => {
-                let child_ref = if operand == &old_child {
+                let child_ref = if **operand == *old_child {
                     operand
                 } else {
                     return Err(anyhow!("Old child is not a child of the given node"));
                 };
-                *child_ref = new_child;
+                *child_ref = Box::new(new_child);
                 Ok(())
             }
         }
     }
 
     pub fn to_infix(&self) -> Result<Vec<Token>> {
-        let root_node = self
-            .get_node(self.root_key())
-            .context("Expected a root node")?;
-        self.build_expression(None, root_node)
+        self.build_expression(None)
     }
 
-    fn build_expression(&self, parent_node: Option<&Node>, node: &Node) -> Result<Vec<Token>> {
-        match node {
+    fn build_expression(&self, parent_node: Option<&Node>) -> Result<Vec<Token>> {
+        match self {
             Node::LiteralInteger(value) => Ok(vec![Token::LiteralInteger(*value)]),
             Node::Identifier(name) => Ok(vec![Token::Identifier(name.to_string())]),
             Node::Composite(CompositeData {
@@ -446,11 +350,11 @@ impl ExpressionTree<Valid> {
                 ..
             }) => {
                 let mut tokens = Vec::new();
-                let mut add_tokens = self.build_group_tokens(Some(node), add.iter(), Token::Plus);
+                let mut add_tokens = build_group_tokens(Some(self), add.iter(), Token::Plus);
                 let mut subtract_tokens =
-                    self.build_group_tokens(Some(node), subtract.iter(), Token::Dash);
+                    build_group_tokens(Some(self), subtract.iter(), Token::Dash);
 
-                Self::parenthesize_if_precedence(
+                parenthesize_if_precedence(
                     parent_node,
                     BinaryOperator::Add,
                     &mut tokens,
@@ -471,12 +375,12 @@ impl ExpressionTree<Valid> {
                 right: divide,
                 ..
             }) => {
-                let divides_operator = self.get_child_operator(divide);
+                let divides_operator = get_child_operator(divide);
                 let mut tokens = Vec::new();
                 let mut multiply_tokens =
-                    self.build_group_tokens(Some(node), multiply.iter(), Token::Asterisk);
+                    build_group_tokens(Some(self), multiply.iter(), Token::Asterisk);
                 let mut divide_tokens =
-                    self.build_group_tokens(Some(node), divide.iter(), Token::Asterisk);
+                    build_group_tokens(Some(self), divide.iter(), Token::Asterisk);
 
                 // Put a 1 as numerator if it's empty and there's a denominator, for readability.
                 if multiply_tokens.is_empty() && !divide_tokens.is_empty() {
@@ -488,8 +392,8 @@ impl ExpressionTree<Valid> {
                     if let Some(divides_operator) = divides_operator {
                         tokens.push(Token::ForwardSlash);
 
-                        Self::parenthesize_if_precedence(
-                            Some(node),
+                        parenthesize_if_precedence(
+                            Some(self),
                             divides_operator,
                             tokens,
                             |tokens| tokens.append(&mut divide_tokens),
@@ -499,7 +403,7 @@ impl ExpressionTree<Valid> {
                         tokens.append(&mut divide_tokens);
                     }
                 };
-                Self::parenthesize_if_precedence(
+                parenthesize_if_precedence(
                     parent_node,
                     BinaryOperator::Multiply,
                     &mut tokens,
@@ -515,17 +419,11 @@ impl ExpressionTree<Valid> {
                 right_operand,
             } => {
                 let mut tokens = Vec::new();
-                let left_node = self
-                    .get_node(*left_operand)
-                    .context("Expected left operand to exist")?;
-                let right_node = self
-                    .get_node(*right_operand)
-                    .context("Expected right operand to exist")?;
 
-                let mut left_tokens = self.build_expression(Some(node), left_node)?;
-                let mut right_tokens = self.build_expression(Some(node), right_node)?;
+                let mut left_tokens = left_operand.build_expression(Some(self))?;
+                let mut right_tokens = right_operand.build_expression(Some(self))?;
 
-                Self::parenthesize_if_precedence(
+                parenthesize_if_precedence(
                     parent_node,
                     BinaryOperator::Multiply,
                     &mut tokens,
@@ -540,11 +438,7 @@ impl ExpressionTree<Valid> {
             }
             Node::UnaryOperation { operator, operand } => {
                 let mut tokens = Vec::new();
-                let operand_node = self
-                    .get_node(*operand)
-                    .context("Expected an operand to exist")?;
-
-                let mut operand_tokens = self.build_expression(Some(node), operand_node)?;
+                let mut operand_tokens = operand.build_expression(Some(self))?;
 
                 tokens.push(operator.token());
                 tokens.push(Token::LeftParentheses);
@@ -556,145 +450,139 @@ impl ExpressionTree<Valid> {
         }
     }
 
-    /// If there are multiple child operators, it returns the one with highest precedence.
-    fn get_child_operator(&self, children: &[NodeKey]) -> Option<BinaryOperator> {
-        children
-            .iter()
-            .filter_map(|key| self.get_node(*key))
-            .filter_map(Node::as_binary_operator)
-            .sorted_by(|a, b| a.precedence().cmp(&b.precedence()))
-            .rev()
-            .next()
-    }
-
-    fn parenthesize_if(
-        tokens: &mut Vec<Token>,
-        predicate: impl Fn() -> bool,
-        mut build_interior: impl FnMut(&mut Vec<Token>),
-    ) {
-        let mut close_parentheses = false;
-
-        if predicate() {
-            tokens.push(Token::LeftParentheses);
-            close_parentheses = true;
-        }
-
-        build_interior(tokens);
-
-        if close_parentheses {
-            tokens.push(Token::RightParentheses);
-        }
-    }
-
-    fn parenthesize_if_precedence(
-        parent_node: Option<&Node>,
-        operator: BinaryOperator,
-        tokens: &mut Vec<Token>,
-        build_interior: impl FnMut(&mut Vec<Token>),
-    ) {
-        let predicate = || {
-            if let Some(parent) = parent_node {
-                if let Some(parent_operator) = parent.as_binary_operator() {
-                    // When a child operator has lower precedence, it and its operands needs
-                    // to be wrapped in parentheses.
-                    if parent_operator.precedence_gt(&operator) {
-                        return true;
+    fn write_to(&self, builder: &mut TreeBuilder) {
+        match self {
+            Node::LiteralInteger(value) => {
+                builder.add_empty_child(format!("{}", value));
+            }
+            Node::Identifier(name) => {
+                builder.add_empty_child(name.to_string());
+            }
+            Node::Composite(data) => {
+                builder.begin_child(data.node_name());
+                if !data.left.is_empty() {
+                    builder.begin_child(data.left_node_name());
+                    for node in &data.left {
+                        node.write_to(builder)
                     }
+                    builder.end_child();
+                }
+                if !data.right.is_empty() {
+                    builder.begin_child(data.right_node_name());
+                    for node in &data.right {
+                        node.write_to(builder)
+                    }
+                    builder.end_child();
+                }
+                builder.end_child();
+            }
+            Node::BinaryOperation {
+                operator,
+                left_operand,
+                right_operand,
+            } => {
+                builder.begin_child(format!("{}", operator));
+                left_operand.write_to(builder);
+                right_operand.write_to(builder);
+                builder.end_child();
+            }
+            Node::UnaryOperation { operator, operand } => {
+                builder.begin_child(format!("{}", operator));
+                operand.write_to(builder);
+                builder.end_child();
+            }
+        }
+    }
+
+    fn format_tree(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut builder = TreeBuilder::new("expression".into());
+        self.write_to(&mut builder);
+        let mut buffer: Vec<u8> = Vec::new();
+        match write_tree(&builder.build(), &mut buffer) {
+            Ok(_) => {}
+            Err(_) => return Err(fmt::Error),
+        }
+        let text = match std::str::from_utf8(&buffer) {
+            Ok(text) => text,
+            Err(_) => return Err(fmt::Error),
+        };
+        f.write_str(text)
+    }
+}
+
+/// If there are multiple child operators, it returns the one with highest precedence.
+fn get_child_operator(children: &[Node]) -> Option<BinaryOperator> {
+    children
+        .iter()
+        .filter_map(Node::as_binary_operator)
+        .sorted_by(|a, b| a.precedence().cmp(&b.precedence()))
+        .rev()
+        .next()
+}
+
+fn parenthesize_if(
+    tokens: &mut Vec<Token>,
+    predicate: impl Fn() -> bool,
+    mut build_interior: impl FnMut(&mut Vec<Token>),
+) {
+    let mut close_parentheses = false;
+
+    if predicate() {
+        tokens.push(Token::LeftParentheses);
+        close_parentheses = true;
+    }
+
+    build_interior(tokens);
+
+    if close_parentheses {
+        tokens.push(Token::RightParentheses);
+    }
+}
+
+fn parenthesize_if_precedence(
+    parent_node: Option<&Node>,
+    operator: BinaryOperator,
+    tokens: &mut Vec<Token>,
+    build_interior: impl FnMut(&mut Vec<Token>),
+) {
+    let predicate = || {
+        if let Some(parent) = parent_node {
+            if let Some(parent_operator) = parent.as_binary_operator() {
+                // When a child operator has lower precedence, it and its operands needs
+                // to be wrapped in parentheses.
+                if parent_operator.precedence_gt(&operator) {
+                    return true;
                 }
             }
-            false
-        };
-
-        Self::parenthesize_if(tokens, predicate, build_interior);
-    }
-
-    fn build_group_tokens<'a>(
-        &self,
-        parent_node: Option<&Node>,
-        iterator: impl Iterator<Item = &'a NodeKey>,
-        intersperse_with: Token,
-    ) -> Vec<Token> {
-        iterator
-            .filter_map(|key| self.get_node(*key))
-            .filter_map(|node| self.build_expression(parent_node, node).ok())
-            .intersperse(vec![intersperse_with])
-            .flatten()
-            .collect()
-    }
-
-    fn write_node(&self, node: NodeKey, builder: &mut TreeBuilder) {
-        match self.get_node(node) {
-            None => {}
-            Some(node) => match node {
-                Node::LiteralInteger(value) => {
-                    builder.add_empty_child(format!("{}", value));
-                }
-                Node::Identifier(name) => {
-                    builder.add_empty_child(name.to_string());
-                }
-                Node::Composite(data) => {
-                    builder.begin_child(data.node_name());
-                    if !data.left.is_empty() {
-                        builder.begin_child(data.left_node_name());
-                        for key in &data.left {
-                            self.write_node(*key, builder)
-                        }
-                        builder.end_child();
-                    }
-                    if !data.right.is_empty() {
-                        builder.begin_child(data.right_node_name());
-                        for key in &data.right {
-                            self.write_node(*key, builder)
-                        }
-                        builder.end_child();
-                    }
-                    builder.end_child();
-                }
-                Node::BinaryOperation {
-                    operator,
-                    left_operand,
-                    right_operand,
-                } => {
-                    builder.begin_child(format!("{}", operator));
-                    self.write_node(*left_operand, builder);
-                    self.write_node(*right_operand, builder);
-                    builder.end_child();
-                }
-                Node::UnaryOperation { operator, operand } => {
-                    builder.begin_child(format!("{}", operator));
-                    self.write_node(*operand, builder);
-                    builder.end_child();
-                }
-            },
         }
-    }
-}
-
-impl Display for ExpressionTree<Valid> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        format_tree(self, f)
-    }
-}
-
-impl Debug for ExpressionTree<Valid> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        format_tree(self, f)
-    }
-}
-
-fn format_tree(tree: &ExpressionTree<Valid>, f: &mut Formatter<'_>) -> fmt::Result {
-    let mut builder = TreeBuilder::new("expression".into());
-    tree.write_node(tree.root_key(), &mut builder);
-    let mut buffer: Vec<u8> = Vec::new();
-    match write_tree(&builder.build(), &mut buffer) {
-        Ok(_) => {}
-        Err(_) => return Err(fmt::Error),
-    }
-    let text = match std::str::from_utf8(&buffer) {
-        Ok(text) => text,
-        Err(_) => return Err(fmt::Error),
+        false
     };
-    f.write_str(text)
+
+    parenthesize_if(tokens, predicate, build_interior);
+}
+
+fn build_group_tokens<'a>(
+    parent_node: Option<&Node>,
+    iterator: impl Iterator<Item = &'a Node>,
+    intersperse_with: Token,
+) -> Vec<Token> {
+    iterator
+        .filter_map(|node| node.build_expression(parent_node).ok())
+        .intersperse(vec![intersperse_with])
+        .flatten()
+        .collect()
+}
+
+impl Display for Node {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.format_tree(f)
+    }
+}
+
+impl Debug for Node {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.format_tree(f)
+    }
 }
 
 #[cfg(test)]
@@ -706,7 +594,7 @@ mod tests {
         let tokens = create_simple_postfix_tokens();
         let expected_tree = create_simple_tree();
 
-        let actual_tree = ExpressionTree::<Valid>::new(tokens).unwrap();
+        let actual_tree = new_tree(tokens).unwrap();
 
         assert_eq!(actual_tree, expected_tree);
     }
@@ -716,7 +604,7 @@ mod tests {
         let tokens = create_complex_postfix_tokens();
         let expected_tree = create_complex_tree();
 
-        let actual_tree = ExpressionTree::<Valid>::new(tokens).unwrap();
+        let actual_tree = new_tree(tokens).unwrap();
 
         assert_eq!(actual_tree, expected_tree);
     }
@@ -730,12 +618,18 @@ mod tests {
 
     #[test]
     fn get_child_operator_returns_child_with_highest_precedence() {
-        let tree = create_complex_tree();
-        let children = tree.nodes.clone();
+        let children = vec![
+            Node::new_multiplied(vec![Node::new_identifier("x".into())]),
+            Node::new_summed(vec![Node::new_identifier("y".into())]),
+            Node::new_binary_exponentiation(
+                Node::new_identifier("x".into()),
+                Node::new_literal_integer(2),
+            ),
+        ];
 
-        let operator = tree.get_child_operator(&children.keys().collect::<Vec<NodeKey>>());
+        let operator = get_child_operator(&children);
 
-        assert_eq!(operator, Some(BinaryOperator::Multiply))
+        assert_eq!(operator, Some(BinaryOperator::Exponentiate))
     }
 
     #[test]
@@ -758,16 +652,10 @@ mod tests {
         assert_eq!(actual_tokens, expected_tokens);
     }
 
-    fn create_simple_tree() -> ExpressionTree<Valid> {
-        let mut nodes = SlotMap::with_key();
-        let x = nodes.insert(Node::new_identifier("x".into()));
-        let y = nodes.insert(Node::new_identifier("y".into()));
-        let plus = nodes.insert(Node::new_binary_addition(x, y));
-
-        ExpressionTree {
-            nodes,
-            state: Valid { root_key: plus },
-        }
+    fn create_simple_tree() -> Node {
+        let x = Node::new_identifier("x".into());
+        let y = Node::new_identifier("y".into());
+        Node::new_binary_addition(x, y)
     }
 
     fn create_simple_postfix_tokens() -> Vec<Token> {
@@ -822,21 +710,13 @@ mod tests {
         .to_vec()
     }
 
-    fn create_complex_tree() -> ExpressionTree<Valid> {
-        let mut nodes = SlotMap::with_key();
-        let x = nodes.insert(Node::new_identifier("x".into()));
-        let y = nodes.insert(Node::new_identifier("y".into()));
-        let z = nodes.insert(Node::new_identifier("z".into()));
-        let a = nodes.insert(Node::new_identifier("a".into()));
-        let second_plus = nodes.insert(Node::new_binary_addition(y, z));
-        let star = nodes.insert(Node::new_binary_multiplication(second_plus, a));
-        let first_plus = nodes.insert(Node::new_binary_addition(x, star));
-
-        ExpressionTree {
-            nodes,
-            state: Valid {
-                root_key: first_plus,
-            },
-        }
+    fn create_complex_tree() -> Node {
+        let x = Node::new_identifier("x".into());
+        let y = Node::new_identifier("y".into());
+        let z = Node::new_identifier("z".into());
+        let a = Node::new_identifier("a".into());
+        let second_plus = Node::new_binary_addition(y, z);
+        let star = Node::new_binary_multiplication(second_plus, a);
+        Node::new_binary_addition(x, star)
     }
 }

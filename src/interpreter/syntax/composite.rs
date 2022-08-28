@@ -1,12 +1,12 @@
 use crate::interpreter::operator::BinaryOperator;
-use crate::interpreter::syntax::expression_tree::NodeKey;
+use crate::interpreter::syntax::expression_tree::Node;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CompositeData {
     pub(crate) operator: BinaryOperator,
     pub(crate) inverse_operator: BinaryOperator,
-    pub(crate) left: Vec<NodeKey>,
-    pub(crate) right: Vec<NodeKey>,
+    pub(crate) left: Vec<Node>,
+    pub(crate) right: Vec<Node>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -24,14 +24,21 @@ impl CompositeData {
         self.operator == BinaryOperator::Multiply && self.inverse_operator == BinaryOperator::Divide
     }
 
-    pub(crate) fn child(&self, which: CompositeChild) -> &[NodeKey] {
+    pub(crate) fn child(&self, which: CompositeChild) -> &[Node] {
         match which {
             CompositeChild::Left => &self.left,
             CompositeChild::Right => &self.right,
         }
     }
 
-    pub(crate) fn new_summation(adds: Vec<NodeKey>, subtracts: Vec<NodeKey>) -> CompositeData {
+    pub(crate) fn child_owned(self, which: CompositeChild) -> Vec<Node> {
+        match which {
+            CompositeChild::Left => self.left,
+            CompositeChild::Right => self.right,
+        }
+    }
+
+    pub(crate) fn new_summation(adds: Vec<Node>, subtracts: Vec<Node>) -> CompositeData {
         CompositeData {
             operator: BinaryOperator::Add,
             inverse_operator: BinaryOperator::Subtract,
@@ -40,10 +47,7 @@ impl CompositeData {
         }
     }
 
-    pub(crate) fn new_fraction(
-        numerator: Vec<NodeKey>,
-        denominator: Vec<NodeKey>,
-    ) -> CompositeData {
+    pub(crate) fn new_fraction(numerator: Vec<Node>, denominator: Vec<Node>) -> CompositeData {
         CompositeData {
             operator: BinaryOperator::Multiply,
             inverse_operator: BinaryOperator::Divide,
@@ -52,11 +56,11 @@ impl CompositeData {
         }
     }
 
-    pub(crate) fn new_summed(terms: Vec<NodeKey>) -> CompositeData {
+    pub(crate) fn new_summed(terms: Vec<Node>) -> CompositeData {
         Self::new_summation(terms, vec![])
     }
 
-    pub(crate) fn new_multiplied(factors: Vec<NodeKey>) -> CompositeData {
+    pub(crate) fn new_multiplied(factors: Vec<Node>) -> CompositeData {
         Self::new_fraction(factors, vec![])
     }
 

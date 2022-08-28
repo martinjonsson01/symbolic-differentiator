@@ -1,7 +1,8 @@
 mod infix_converter;
 
-use crate::interpreter::syntax::expression_tree::{ExpressionTree, Valid};
 use crate::interpreter::parser::infix_converter::infix_to_postfix;
+use crate::interpreter::syntax::expression_tree;
+use crate::interpreter::syntax::expression_tree::Node;
 use crate::interpreter::token;
 use crate::interpreter::token::Token;
 use anyhow::Result;
@@ -21,8 +22,8 @@ use anyhow::Result;
 /// let tree = parse(infix_tokens)?;
 /// let regenerated_tokens = tree.to_infix();
 /// ```
-pub fn parse(infix_tokens: Vec<Token>) -> Result<ExpressionTree<Valid>> {
+pub fn parse(infix_tokens: Vec<Token>) -> Result<Node> {
     let postfix_tokens = infix_to_postfix(infix_tokens)?;
-    let tree = ExpressionTree::<Valid>::new(postfix_tokens)?;
+    let tree = expression_tree::new_tree(postfix_tokens)?;
     Ok(tree)
 }

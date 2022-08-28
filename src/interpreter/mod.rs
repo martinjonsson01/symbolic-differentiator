@@ -7,11 +7,11 @@ mod syntax;
 pub mod token;
 
 use crate::find_derivative;
-use syntax::expression_tree::{ExpressionTree, Node, NodeKey, Valid};
 use crate::interpreter::simplifier::simplify;
 use crate::interpreter::token::Token;
 use anyhow::{Context, Result};
 use string_builder::Builder;
+use syntax::expression_tree::Node;
 
 /// Calculates the derivative of the given expression with respect to the given variable.
 ///
@@ -60,7 +60,7 @@ pub fn differentiate(expression: String, with_respect_to: String) -> Result<Stri
 /// let tree = convert(expression.into())?;
 /// let regenerated_tokens = tree.to_infix();
 /// ```
-fn convert(expression: String) -> Result<ExpressionTree<Valid>> {
+fn convert(expression: String) -> Result<Node> {
     let tokens = lexer::tokenize(expression)?;
     let expression_tree = parser::parse(tokens)?;
     Ok(expression_tree)
@@ -99,18 +99,13 @@ pub fn tokens_to_string(tokens: Vec<Token>) -> Result<String> {
     builder.string().context("Failed to build token string")
 }
 
-fn find_matching_node<'a, F>(
-    tree: &mut ExpressionTree<Valid>,
-    keys: impl Iterator<Item = &'a NodeKey>,
-    predicate: F,
-) -> Option<NodeKey>
+fn find_matching_node<'a, F>(nodes: impl Iterator<Item = &'a Node>, predicate: F) -> Option<&'a Node>
 where
     F: Fn(&Node) -> bool,
 {
-    for child_key in keys {
-        let node = tree.get_node(*child_key)?;
+    for node in nodes {
         if predicate(node) {
-            return Some(*child_key);
+            return Some(node);
         }
     }
     None

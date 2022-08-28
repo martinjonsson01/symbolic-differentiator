@@ -3,7 +3,7 @@ use std::fmt;
 use std::fmt::Formatter;
 
 /// A binary mathematical operator.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum BinaryOperator {
     Add,
     Subtract,
@@ -13,7 +13,7 @@ pub enum BinaryOperator {
 }
 
 /// An unary mathematical operator.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum UnaryOperator {
     PositiveSquareRoot,
     NaturalLogarithm,

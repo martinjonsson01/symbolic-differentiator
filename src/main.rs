@@ -1,4 +1,5 @@
 #![feature(if_let_guard)]
+#![feature(test)]
 
 use crate::interpreter::differentiate;
 use crate::interpreter::differentiator::find_derivative;

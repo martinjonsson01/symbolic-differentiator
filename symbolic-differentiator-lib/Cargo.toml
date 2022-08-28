@@ -15,3 +15,8 @@ itertools = "0.10"
 [dev-dependencies]
 pretty_assertions = "1.2.1"
 parameterized-macro = "1.0"
+criterion = { version = "0.3", features = ["html_reports"] }
+
+[[bench]]
+name = "differentiation_benchmark"
+harness = false

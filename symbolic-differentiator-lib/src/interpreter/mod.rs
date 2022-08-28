@@ -131,8 +131,6 @@ macro_rules! debug {
 mod interpreter_tests {
     use super::*;
     use parameterized_macro::parameterized;
-    extern crate test;
-    use test::Bencher;
 
     #[test]
     fn simple_expression_regenerates_to_itself() {
@@ -231,20 +229,5 @@ mod interpreter_tests {
     ) {
         let actual_derivative = differentiate(expression.to_string(), "x".to_string()).unwrap();
         assert_eq!(actual_derivative, expected_derivative);
-    }
-
-    #[bench]
-    fn bench_differentiate_simple_expression(bencher: &mut Bencher) {
-        bencher.iter(|| differentiate("x^2".to_string(), "x".to_string()));
-    }
-
-    #[bench]
-    fn bench_differentiate_complex_expression(bencher: &mut Bencher) {
-        bencher.iter(|| {
-            differentiate(
-                "(x^2+z)^(y*z)+(a+b+c^x)-(8*x^2)".to_string(),
-                "x".to_string(),
-            )
-        });
     }
 }
